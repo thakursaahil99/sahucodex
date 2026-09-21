@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# A newer push supersedes an older run of the same ref instead of queueing behind (or outliving) it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   api:
     runs-on: ubuntu-latest
@@ -38,6 +43,7 @@ jobs:
 
   judge:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: apps/judge
@@ -56,9 +62,13 @@ jobs:
       - run: python -m ruff check .
       - run: python -m ruff format --check .
       - name: pytest (real Docker sandbox tests included)
+        timeout-minutes: 15
         run: |
-          set -o pipefail
-          python -m pytest -q -rfE --tb=short 2>&1 | tee pytest.out
+          # Redirect to a file instead of piping to tee: a test that leaks a child process which inherits the pipe would
+          # otherwise keep this step alive forever after pytest itself has finished.
+          python -m pytest -q -rfE --tb=short > pytest.out 2>&1 || status=$?
+          cat pytest.out
+          exit "${status:-0}"
       # Job logs need repository admin rights to download, so a failure here would otherwise be a bare "exit code 1" to
       # anyone reading the run from outside. Annotations are visible to everyone who can see the run.
       - name: Surface failing tests as annotations
