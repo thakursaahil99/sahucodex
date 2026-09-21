@@ -55,7 +55,19 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: python -m ruff check .
       - run: python -m ruff format --check .
-      - run: python -m pytest -q
+      - name: pytest (real Docker sandbox tests included)
+        run: |
+          set -o pipefail
+          python -m pytest -q -rfE --tb=short 2>&1 | tee pytest.out
+      # Job logs need repository admin rights to download, so a failure here would otherwise be a bare "exit code 1" to
+      # anyone reading the run from outside. Annotations are visible to everyone who can see the run.
+      - name: Surface failing tests as annotations
+        if: failure()
+        run: |
+          grep -E "^(FAILED|ERROR) " pytest.out | head -10 | while IFS= read -r line; do
+            echo "::error title=judge test failed::${line:0:900}"
+          done
+          tail -n 40 pytest.out | sed -e 's/%/%25/g' -e ':a;N;$!ba;s/\n/%0A/g' | { read -r body; echo "::error title=judge pytest tail::${body:0:4000}"; }
 
   web:
     runs-on: ubuntu-latest
