@@ -1,0 +1,17 @@
+# Runtime dependencies (pinned). Update deliberately and re-run the test suite.
+fastapi==0.141.1
+uvicorn[standard]==0.53.0
+SQLAlchemy[asyncio]==2.0.54
+asyncpg==0.31.0
+alembic==1.20.0
+pydantic==2.13.5
+pydantic-settings==2.15.0
+python-dotenv==1.2.3  # also read directly by database/seeds/run.py
+email-validator==2.3.0
+argon2-cffi==25.1.0
+PyJWT==2.14.0
+redis==8.1.0
+structlog==26.1.0
+prometheus-client==0.26.0
+celery==5.6.3  # job producer in the API; also the judge worker (apps/judge)
+httpx==0.28.1  # SahuCodeX AI's client to the Ollama HTTP API

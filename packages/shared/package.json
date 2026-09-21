@@ -1,0 +1,17 @@
+{
+  "name": "@sahucodex/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Types and constants shared by the SahuCodeX frontend (and later the e2e tests).",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3"
+  }
+}

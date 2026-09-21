@@ -1,0 +1,30 @@
+[project]
+name = "sahucodex-api"
+version = "0.1.0"
+description = "SahuCodeX FastAPI backend"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore::DeprecationWarning:fakeredis.*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["."]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "S", "ASYNC", "SIM", "RUF"]
+ignore = [
+  "B008",   # FastAPI's Depends()/Query() in defaults is the idiom
+  "S101",   # assert is fine in tests and for type narrowing
+  "S105",   # false positives on names like PASSWORD_RESET / token_type; real secrets come from env
+  "RUF012",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S311", "RUF059"]
+"app/core/email.py" = ["S603", "S607"]

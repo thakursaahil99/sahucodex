@@ -1,0 +1,179 @@
+# SahuCodeX — local / single-host stack.
+#
+#   cp .env.example .env
+#   docker compose up --build
+#   -> http://localhost:3000   (change WEB_PORT + PUBLIC_URL in .env if 3000 is taken)
+#
+# Optional:  docker compose --profile ai up      also starts Ollama (see docs/ai.md)
+#
+# Only Caddy is published to the network. Postgres/Redis/API are bound to 127.0.0.1 for local
+# tooling; remove those port mappings on a shared host.
+# SahuJudge (phase 3): `judge` is the Celery worker; `sandbox` is a DEDICATED Docker daemon (rootless Docker-in-Docker)
+# that runs submitted code in isolated containers. Read docs/judge.md before exposing this to strangers.
+# Phase 8 adds Prometheus, Grafana and Qdrant (docs/architecture.md).
+
+name: sahucodex
+
+x-hardened: &hardened
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  backend:
+    <<: *hardened
+    build:
+      context: .
+      dockerfile: infrastructure/docker/api.Dockerfile
+    env_file: .env
+    environment:
+      # In-network addresses override the localhost values that .env uses for host-run development.
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      FRONTEND_URL: ${PUBLIC_URL:-http://localhost:3000}
+      CORS_ORIGINS: ${PUBLIC_URL:-http://localhost:3000}
+      # Exactly one trusted proxy (Caddy) sits in front; it sets X-Forwarded-For to the real client.
+      TRUSTED_PROXY_COUNT: "1"
+      APP_ENV: ${APP_ENV:-development}
+    read_only: true
+    tmpfs: ["/tmp"]
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  frontend:
+    <<: *hardened
+    build:
+      context: .
+      dockerfile: infrastructure/docker/web.Dockerfile
+    environment:
+      HTTPS_ONLY: ${HTTPS_ONLY:-false}
+    depends_on:
+      backend: { condition: service_healthy }
+
+  # ---- SahuJudge --------------------------------------------------------------------------------------------------
+  # A DEDICATED Docker daemon whose only job is to run submitted code. It is not the host's daemon and holds no
+  # application data or secrets; it is reachable only from `judge`, over the internal `sandbox-control` network. It has
+  # no route to Postgres or Redis (it is not on the default network), and the containers it creates for submissions
+  # have no network at all. `privileged` is what Docker-in-Docker requires; rootless mode limits the blast radius of a
+  # daemon compromise to an unprivileged user. For production, prefer pointing SANDBOX_DOCKER_HOST at a separate machine
+  # (optionally with gVisor: SANDBOX_RUNTIME=runsc) and delete this service. See docs/judge.md.
+  #
+  # NOT BOOTED HERE (no Docker in the environment this was built in): DOCKER_TLS_CERTDIR="" is the image's documented
+  # way to serve plain (unauthenticated) TCP on :2375, which the internal network above makes acceptable — but if it
+  # does not come up listening, pass `command: ["dockerd-entrypoint.sh", "--host=tcp://0.0.0.0:2375"]` explicitly.
+  sandbox:
+    image: docker:27-dind-rootless
+    restart: unless-stopped
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: ""  # plain TCP, acceptable only because the network below is internal and holds two services
+    volumes:
+      - sandbox-data:/home/rootless/.local/share/docker
+    networks: [sandbox-control, sandbox-egress]
+    healthcheck:
+      test: ["CMD-SHELL", "docker -H tcp://127.0.0.1:2375 info >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+
+  judge:
+    <<: *hardened
+    build:
+      context: .
+      dockerfile: infrastructure/docker/judge.Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      APP_ENV: ${APP_ENV:-development}
+      SANDBOX_DOCKER_HOST: tcp://sandbox:2375
+    read_only: true
+    tmpfs: ["/tmp"]
+    networks: [default, sandbox-control]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      sandbox: { condition: service_healthy }
+
+  # The only public entrypoint: /api/* -> backend, everything else -> frontend.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - ./infrastructure/docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      - "${WEB_PORT:-3000}:80"
+    depends_on:
+      backend: { condition: service_healthy }
+      frontend: { condition: service_healthy }
+
+  # Local LLM runtime for SahuCodeX AI (build phase 5). Start with:  docker compose --profile ai up
+  # Pull a model once:  docker compose exec ollama ollama pull <model>   and set OLLAMA_MODEL in .env.
+  # For NVIDIA GPUs, add a `deploy.resources.reservations.devices` block (see Ollama's Docker docs).
+  ollama:
+    profiles: ["ai"]
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama-data:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+networks:
+  # judge <-> sandbox daemon only. `internal` means nothing on it can reach the internet or the host.
+  sandbox-control:
+    internal: true
+  # Lets the sandbox daemon pull base images and packages when it builds the runner image. Nothing else is on it.
+  sandbox-egress:
+
+volumes:
+  sandbox-data:
+  postgres-data:
+  redis-data:
+  caddy-data:
+  caddy-config:
+  ollama-data:

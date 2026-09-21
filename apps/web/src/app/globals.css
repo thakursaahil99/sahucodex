@@ -1,0 +1,214 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * SahuCodeX design tokens.
+ * Dark is the default theme. Electric blue = primary, violet = secondary accent, cyan = highlights.
+ * Text/background pairs are chosen to meet WCAG AA (4.5:1) for body text.
+ */
+:root {
+  --background: #f6f7fb;
+  --foreground: #0b1020;
+  --card: #ffffff;
+  --card-foreground: #0b1020;
+  --popover: #ffffff;
+  --popover-foreground: #0b1020;
+  --primary: #2f66ec;
+  --primary-foreground: #ffffff;
+  --secondary: #ece9fe;
+  --secondary-foreground: #4c1d95;
+  --muted: #eceef6;
+  --muted-foreground: #4b5573;
+  --accent: #dff7fc;
+  --accent-foreground: #0e5a70;
+  --destructive: #c62828;
+  --success: #15803d;
+  --warning: #a16207;
+  --border: #dcdfec;
+  --input: #c9cee2;
+  --ring: #2f66ec;
+  --link: #2455e8;
+  --brand-blue: #2f66ec;
+  --brand-violet: #7c4dff;
+  --brand-cyan: #0ea5c6;
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: #090b13;
+  --foreground: #e9ecf8;
+  --card: #0f1220;
+  --card-foreground: #e9ecf8;
+  --popover: #0f1220;
+  --popover-foreground: #e9ecf8;
+  --primary: #2f66ec;
+  --primary-foreground: #ffffff;
+  --secondary: #1d1738;
+  --secondary-foreground: #c8b6ff;
+  --muted: #151929;
+  --muted-foreground: #9aa3c0;
+  --accent: #0d2b36;
+  --accent-foreground: #67e8f9;
+  --destructive: #f87171;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --border: #222842;
+  --input: #2a3150;
+  --ring: #6b9bff;
+  --link: #7aa5ff;
+  --brand-blue: #4c86ff;
+  --brand-violet: #8b5cf6;
+  --brand-cyan: #22d3ee;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-link: var(--link);
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-violet: var(--brand-violet);
+  --color-brand-cyan: var(--brand-cyan);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+  }
+  /* Visible keyboard focus everywhere; mouse clicks don't show it. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--brand-violet) 35%, transparent);
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    background-image: linear-gradient(95deg, var(--brand-blue), var(--brand-violet) 55%, var(--brand-cyan));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .bg-brand-gradient {
+    background-image: linear-gradient(135deg, var(--brand-blue), var(--brand-violet));
+  }
+  /* Faint developer-grid backdrop that fades out toward the edges. */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 30%, transparent 75%);
+  }
+  .glow-blue {
+    background: radial-gradient(closest-side, color-mix(in oklab, var(--brand-blue) 40%, transparent), transparent);
+  }
+  .glow-violet {
+    background: radial-gradient(closest-side, color-mix(in oklab, var(--brand-violet) 38%, transparent), transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Rendered Markdown (problem statements, editorials). Deliberately small: no typography plugin needed. */
+@layer components {
+  .markdown {
+    @apply text-[15px] leading-7;
+  }
+  .markdown > * + * {
+    @apply mt-4;
+  }
+  .markdown h1,
+  .markdown h2,
+  .markdown h3 {
+    @apply font-semibold tracking-tight;
+  }
+  .markdown h2 {
+    @apply mt-6 text-lg;
+  }
+  .markdown h3 {
+    @apply mt-5 text-base;
+  }
+  .markdown ul {
+    @apply list-disc space-y-1 pl-6;
+  }
+  .markdown ol {
+    @apply list-decimal space-y-1 pl-6;
+  }
+  .markdown a {
+    @apply text-link underline underline-offset-2;
+  }
+  .markdown code {
+    @apply rounded-md bg-muted px-1.5 py-0.5 font-mono text-[0.875em];
+  }
+  .markdown pre {
+    @apply overflow-x-auto rounded-lg border bg-muted/60 p-4;
+  }
+  .markdown pre code {
+    @apply bg-transparent p-0;
+  }
+  .markdown blockquote {
+    @apply border-l-4 border-brand-violet/50 pl-4 text-muted-foreground;
+  }
+  .markdown table {
+    @apply w-full border-collapse text-sm;
+  }
+  .markdown th,
+  .markdown td {
+    @apply border px-3 py-2 text-left;
+  }
+  .markdown th {
+    @apply bg-muted font-medium;
+  }
+  .markdown hr {
+    @apply my-6 border-border;
+  }
+}

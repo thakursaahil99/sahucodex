@@ -1,0 +1,32 @@
+# Reverse proxy: the only service exposed to the outside world.
+#
+#   browser ──► caddy ──┬─ /api/*  ──► backend  (FastAPI)
+#                       └─ others  ──► frontend (Next.js)
+#
+# Why a real proxy instead of Next.js rewrites: Caddy sets X-Forwarded-For to the true client
+# address and discards any value the client sent, so the API can trust exactly one hop
+# (TRUSTED_PROXY_COUNT=1) without being spoofable. Next.js rewrites do not do this.
+#
+# Operational endpoints (/health, /ready, /metrics) are deliberately NOT routed here.
+{
+	admin off
+	# Local/dev is plain HTTP. For production, replace ":80" below with your domain
+	# (e.g. "sahucodex.example.com") and delete this line: Caddy then provisions TLS automatically.
+	auto_https off
+}
+
+:80 {
+	encode zstd gzip
+
+	header {
+		-Server
+	}
+
+	handle /api/* {
+		reverse_proxy {$BACKEND_UPSTREAM:backend:8000}
+	}
+
+	handle {
+		reverse_proxy {$FRONTEND_UPSTREAM:frontend:3000}
+	}
+}

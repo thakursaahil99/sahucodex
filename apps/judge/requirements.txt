@@ -1,0 +1,2 @@
+# The worker shares the API requirements (models, settings) and adds nothing else of its own.
+-r ../api/requirements.txt

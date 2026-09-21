@@ -1,0 +1,20 @@
+{
+  "name": "sahucodex",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SahuCodeX — Code. Compete. Learn. AI-powered coding & competitive programming platform.",
+  "workspaces": [
+    "apps/web",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:web": "npm run dev -w @sahucodex/web",
+    "build:web": "npm run build -w @sahucodex/web",
+    "lint:web": "npm run lint -w @sahucodex/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test:web": "npm run test -w @sahucodex/web"
+  }
+}

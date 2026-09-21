@@ -1,0 +1,29 @@
+[project]
+name = "sahucodex-judge"
+version = "0.1.0"
+description = "SahuJudge: sandboxed execution and judging worker"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+# `app` (the API package: models, settings) is shared with the worker, exactly as in the worker image.
+pythonpath = [".", "../api"]
+filterwarnings = ["ignore::DeprecationWarning:fakeredis.*"]
+markers = [
+  "docker: needs a running Docker daemon and the runner image (set SJX_DOCKER_TESTS=1); skipped otherwise",
+  "linux: needs a POSIX/Linux host (the in-container supervisor reads /proc)",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = [".", "../api"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "S", "ASYNC", "SIM", "RUF"]
+ignore = ["B008", "S101", "S105", "RUF012"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S108", "S311", "S603", "RUF059", "E501"]
