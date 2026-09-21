@@ -205,7 +205,7 @@ test.describe("problem workspace", () => {
 
     // The AI is a real, signed-in feature (see ai.spec.ts): anonymously, asking gets an honest message, not a fake reply.
     await page.getByRole("button", { name: "AI Hint", exact: true }).click();
-    await expect(page.getByRole("alert")).toContainText("sign in");
+    await expect(page.getByRole("tabpanel", { name: "SahuCodeX AI" }).getByRole("alert")).toContainText("sign in");
     await expect(page.getByText("a suggestion, not a verdict")).toHaveCount(0);
 
     await page.getByRole("tab", { name: "Output" }).click();
@@ -304,6 +304,9 @@ test.describe("admin", () => {
     await expect(page.getByRole("link", { name: /Published/ })).toContainText(/\d+/);
     await page.getByRole("navigation", { name: "Admin sections" }).getByRole("link", { name: "Problems" }).click();
     await expect(page.getByRole("table")).toBeVisible();
+    // The seeded problems share one timestamp, so which page a given one lands on is arbitrary: search, don't scroll.
+    await page.getByPlaceholder("Search by title or slug…").fill("harbor-cranes");
+    await page.getByRole("button", { name: "Search", exact: true }).click();
     await expect(page.getByRole("row", { name: /Harbor Cranes/ })).toBeVisible();
   });
 

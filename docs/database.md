@@ -136,10 +136,30 @@ Notes:
   `user_problem_progress` (solved counts by difficulty) and `submissions` (totals, acceptance rate, and a sparse
   365-day activity calendar grouped by `date(created_at)`) — no new denormalised columns were needed.
 
+## Phase 5 schema (migration `0005`)
+
+```
+ai_conversations   id, user_id → users (CASCADE), title (≤120), problem_slug (nullable, ≤80), created_at, updated_at
+   └── 1:N ai_messages     id, conversation_id → ai_conversations (CASCADE), role ('user' | 'assistant'), content, created_at
+ai_usage           id, user_id → users (CASCADE), feature ('hint' | 'explain' | 'review' | 'chat'), model,
+                    conversation_id → ai_conversations (SET NULL), prompt_chars, response_chars, duration_ms, failed, created_at
+```
+
+Notes:
+
+* `problem_slug` is a plain string, **not** a foreign key: it only labels what the chat started from and tells the server
+  which *public* problem context to rebuild on each turn. An archived or renamed problem never breaks a saved
+  conversation, and nothing hands the model a row to look up.
+* Only the Assistant chat is stored as a transcript. Hint/Explain/Review are one-off, so they leave just an `ai_usage` row.
+* `ai_usage` gets a row for every request **including failed and abandoned ones** (`failed`, `response_chars = 0`), and
+  survives deleting the conversation (`SET NULL`) so cost and abuse history is not erased by the user. It is deleted with
+  the user (`CASCADE`).
+* Messages are ordered by `created_at`; indexes: `(user_id, created_at)` on conversations and usage,
+  `(conversation_id, created_at)` on messages. Limits per user/conversation are enforced in the service, not the schema.
+
 ## Planned tables
 
-Added by the migration of the phase that needs them (names follow the project specification): `ai_conversations`,
-`ai_messages`, `ai_usage` (5); `contests`, `contest_problems`, `contest_participants`, `contest_submissions`,
+Added by the migration of the phase that needs them (names follow the project specification): `contests`, `contest_problems`, `contest_participants`, `contest_submissions`,
 `leaderboards` (6); `discussions`, `discussion_comments`, `discussion_votes`, `notifications` (7).
 
 ## Working with migrations

@@ -30,8 +30,9 @@
                           └────────────────┘        └──────────────────┘
 ```
 
-Build status: **phases 1–4 (foundation, problem platform, SahuJudge, profiles)** are implemented — everything drawn
-above except the Ollama integration. The judge worker talks to its own, isolated Docker daemon (never the host's
+Build status: **phases 1–5 (foundation, problem platform, SahuJudge, profiles, SahuCodeX AI)** are implemented —
+everything drawn above except Qdrant, MinIO and the metrics stack. The API talks to Ollama over HTTP — a local model, no
+paid service — see [ai.md](ai.md). The judge worker talks to its own, isolated Docker daemon (never the host's
 socket, never the application's) — see [judge.md](judge.md). See the [README](../README.md#roadmap).
 
 ## Repository layout
@@ -77,10 +78,12 @@ app/
                      itself (see apps/judge)
     profiles/        streaks and the achievement catalogue: models, the check functions SahuJudge calls after
                      judging, and the public GET /users/{username}/stats aggregation
+    ai/              SahuCodeX AI: the provider protocol + Ollama client, prompt builders, conversations, usage
+                     metering, and the hint/explain/review/chat routes (streaming over Server-Sent Events)
 ```
 
 Each module owns `models.py` (SQLAlchemy), `schemas.py` (Pydantic, the only shapes that leave the API), `service.py`
-(business logic, no HTTP types) and `router.py` (HTTP glue). Later phases add `ai`, `contests`, `leaderboard`,
+(business logic, no HTTP types) and `router.py` (HTTP glue). Later phases add `contests`, `leaderboard`,
 `discussions`, `notifications` and `analytics` the same way — modules are added when they have real behaviour, not
 stubbed early.
 
@@ -113,6 +116,11 @@ request-scoped session closes, so a failed request cannot leave half-written sta
 | **The event WebSocket authenticates with a minted ticket, not the access token** | A WebSocket handshake cannot carry an `Authorization` header, and putting the token in the URL would leak it into proxy logs. `POST /api/ws/ticket` mints a random, single-use, 30-second, user-bound ticket (stored only as a hash) that the socket redeems once. |
 | **Profile stats, streaks and achievements are public, not owner-only** | `GET /api/users/{username}/stats` needs no auth, the same as the public profile it sits beside — matching how GitHub/LeetCode show activity publicly. A user's *submissions* (their source code) stay owner-only; only aggregate counts, dates and achievement names are public. |
 | **`img-src` allows any `https:` host, for user-set avatar URLs** | There is no file upload or storage abstraction yet (planned for phase 8), so an avatar is a plain URL the user supplies. Images cannot execute script, so allowing any HTTPS host is the standard low-risk way to support this without a per-host allow-list or a proxy. |
+| **AI chat streams over plain HTTP (Server-Sent Events), not the WebSocket** | The reply is one request's response, so a normal `fetch` streams it and can send the `Authorization` header — no ticket dance, no long-lived socket, and it works through Caddy unbuffered. The submissions WebSocket exists because judging finishes *later, elsewhere* (a worker); an AI reply is produced during the request. |
+| **Hint / Explain / Review are one-shot; only chat streams and is stored** | They are read once, in full, and are not conversations; streaming them would add UI state for no benefit. Chat is where seeing the reply arrive matters, and where history is useful. One-shots leave only a usage row. |
+| **The AI gets problem context by slug, resolved server-side, from the public shape only** | The client never sends statement text, and the server builds the prompt from `ProblemPublic` — the same object the public API returns, which has no field for hidden tests or the editorial. Leaking them would need a bug where `ProblemPublic` is built, not in the AI code. |
+| **AI persistence runs in a cancellation-shielded `finally`** | Pressing Stop or closing the tab cancels the stream generator. The partial reply and the usage row are still written, because an abandoned request costs the model as much as a finished one. |
+| **AI failures are 503s, never placeholder text** | With no model configured, an unreachable server or a timeout, every AI route answers `503 AI_UNAVAILABLE` (or an in-band `error` event mid-stream) and the UI says so. Nothing pretends to be a model reply. |
 
 ## Frontend
 
@@ -138,5 +146,9 @@ required (forms, dashboard, command palette). State: TanStack Query for server d
   calendar — no charting library) is shared between `/profile/[username]` and the dashboard's own stats section, both
   reading `GET /users/{username}/stats` through `lib/profiles/api.ts`. `components/settings/` is the self-service form
   for the fields `PATCH /users/me` accepts.
+* `components/ai/` (the Assistant page, conversation list, chat thread and composer, and the workspace's AI tab) and
+  `lib/ai/` (`stream.ts` + `sse.ts` — a `fetch` streaming client with an incremental SSE parser that handles frames split
+  anywhere, including mid-UTF-8 character; `use-chat.ts` — the send/stream/stop state machine; `api.ts` — queries). AI
+  output goes through the shared `Markdown` component, which now also gives fenced code blocks a Copy button.
 * Features that ship in later phases appear in navigation as disabled items, never as links to a 404
   (`packages/shared` → `NAV_ITEMS[].available`).

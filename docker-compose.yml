@@ -68,6 +68,12 @@ services:
       # Exactly one trusted proxy (Caddy) sits in front; it sets X-Forwarded-For to the real client.
       TRUSTED_PROXY_COUNT: "1"
       APP_ENV: ${APP_ENV:-development}
+      # `localhost` inside this container is the container itself, so .env's OLLAMA_BASE_URL cannot work here. Default:
+      # the `ollama` service below (start it with `--profile ai`). For an Ollama already running on the host, set
+      # COMPOSE_OLLAMA_URL=http://host.docker.internal:11434 in .env. AI stays optional either way: with no model
+      # reachable the AI endpoints answer 503 and everything else works.
+      OLLAMA_BASE_URL: ${COMPOSE_OLLAMA_URL:-http://ollama:11434}
+    extra_hosts: ["host.docker.internal:host-gateway"]
     read_only: true
     tmpfs: ["/tmp"]
     ports:

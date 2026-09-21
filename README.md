@@ -6,10 +6,10 @@ An AI-powered coding and competitive-programming platform: an online judge (**Sa
 community, and a local, open-source AI assistant (**SahuCodeX AI**). Everything runs on free/open-source software and
 works locally with **no paid API keys**.
 
-> **Status: build phase 4 of 8 — profiles.** Accounts and sessions (phase 1), 30 original problems in a Monaco
-> workspace (phase 2), **SahuJudge** running and grading real code in an isolated sandbox (phase 3), and now
-> **profiles**: a public profile for every user with solved counts, a streak, achievements and a GitHub-style
-> activity calendar, plus a settings page to edit your own. AI and contests are not built yet; see the
+> **Status: build phase 5 of 8 — SahuCodeX AI.** Accounts and sessions (phase 1), 30 original problems in a Monaco
+> workspace (phase 2), **SahuJudge** grading real code in an isolated sandbox (phase 3), public profiles with streaks
+> and achievements (phase 4), and now **SahuCodeX AI**: hints, code explanations and reviews in the workspace and a
+> streaming chat, all from a *local* open-source model through Ollama — no paid API. Contests are not built yet; see the
 > [roadmap](#roadmap). The UI shows unbuilt features as disabled, never as fake data.
 
 ## What works today
@@ -24,18 +24,19 @@ works locally with **no paid API keys**.
 | **Coding workspace** | Statement, examples, step-by-step hints and a locked editorial next to a self-hosted **Monaco** editor (Python, C++, JavaScript), autosaved drafts, font/wrap/minimap preferences; tabs on phones |
 | **SahuJudge** | Run your code against custom input, or Submit to judge it against public *and* hidden tests, in an isolated, non-root, network-less sandbox container — one per execution, destroyed after. Deterministic verdicts (`ACCEPTED`, `WRONG_ANSWER`, `TIME_LIMIT_EXCEEDED`, `MEMORY_LIMIT_EXCEEDED`, `RUNTIME_ERROR`, `COMPILATION_ERROR`, `SYSTEM_ERROR`), live updates over an authenticated WebSocket, submission history and detail pages. Hidden tests never reach the browser |
 | **Profiles** | A public profile per user (`/profile/username`): solved problems by difficulty, submission totals and acceptance rate, a current/longest solving streak, 8 achievements (earned and locked), a 365-day activity calendar. A settings page to edit your bio, country, website, GitHub and avatar URL |
+| **SahuCodeX AI** | **AI Hint** (progressive, never the solution), **AI Review** and **Explain** in the workspace, on their own *"a suggestion, not a verdict"* tab; a streaming **Assistant** chat with saved, renameable conversations and copyable code blocks. Runs on a local Ollama model you choose (`OLLAMA_MODEL`); unconfigured or unreachable, it says so — never a canned reply. The model only ever sees the public statement and your code, never hidden tests. Rate-limited, size-capped, metered. See [docs/ai.md](docs/ai.md) |
 | **Admin problem editor** | Create/edit problems, public and hidden tests, starter code, hints and editorial; readiness check; publish, unpublish, archive, restore. Hidden tests never reach learners |
 | **Dashboard** | Real data from the API: your account, verification state, active sessions, solved/streak/achievement summary |
 | **Navigation** | Desktop + mobile nav, `Ctrl+K` command palette, theme switcher |
 | **Platform** | Redis rate limiting, structured logging with secret redaction, `/health` `/ready` `/metrics`, security headers + CSP, Alembic migrations, seed data, Caddy reverse proxy |
-| **Tests** | 376 API tests (same suite on SQLite and real PostgreSQL; includes brute-force verification of every seed-problem solution), 127 judge tests on SQLite + fakeredis (39 more need a real Docker daemon — not run in this environment, see [docs/judge.md](docs/judge.md)), 191 web unit/component tests, 56 browser end-to-end tests |
+| **Tests** | 412 API tests (same suite on SQLite and real PostgreSQL; includes brute-force verification of every seed-problem solution) plus 6 opt-in tests against a real Ollama, 127 judge tests on SQLite + fakeredis (39 more need a real Docker daemon — not run in this environment, see [docs/judge.md](docs/judge.md)), 242 web unit/component tests, 61 browser end-to-end tests (the AI ones run against a real local model, unmocked) |
 
 ## Architecture
 
 ```
  browser ─► Caddy ─┬─ /api/*  ─► FastAPI ─┬─► PostgreSQL
                    └─ others  ─► Next.js  └─► Redis  ──► Celery judge worker ─► dedicated sandbox daemon
-                                                └──────(phase 5)─► Ollama
+                                                └──────────────► Ollama (local model, optional)
 ```
 
 Details and the reasoning behind each choice: [docs/architecture.md](docs/architecture.md).
@@ -115,7 +116,7 @@ All configuration is environment variables; [.env.example](.env.example) documen
 | `TRUSTED_PROXY_COUNT` | Reverse proxies in front of the API (compose: 1) |
 | `RATE_LIMIT_*` | Per-route limits, format `5/minute`; `RATE_LIMIT_ENABLED=false` to disable |
 | `EMAIL_BACKEND` | `console` (dev) or `smtp` |
-| `AI_PROVIDER`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | For SahuCodeX AI (phase 5). No model is hardcoded |
+| `OLLAMA_MODEL` (+ `OLLAMA_BASE_URL`, `AI_*`, `RATE_LIMIT_AI`) | SahuCodeX AI. No model is hardcoded; empty = AI answers "not configured" and the rest works — see [docs/ai.md](docs/ai.md) |
 | `SANDBOX_DOCKER_HOST` | The **dedicated** Docker daemon SahuJudge runs sandboxes in — never the host's socket. Set for you in compose |
 | `MAX_INFLIGHT_SUBMISSIONS`, `RATE_LIMIT_SUBMIT`, `RATE_LIMIT_RUN`, `JUDGE_STALE_AFTER` | SahuJudge abuse and cleanup limits — see [docs/judge.md](docs/judge.md) |
 
@@ -124,7 +125,7 @@ All configuration is environment variables; [.env.example](.env.example) documen
 PostgreSQL, migrated with Alembic (`database/migrations`). Compose applies migrations on start. Manually:
 `python -m alembic upgrade head` from `apps/api`. Schema and conventions: [docs/database.md](docs/database.md).
 
-## Ollama (optional until phase 5)
+## Ollama (optional — enables SahuCodeX AI)
 
 ```bash
 docker compose --profile ai up -d ollama
@@ -132,7 +133,9 @@ docker compose exec ollama ollama pull <model-name>      # any model you like
 # .env:  OLLAMA_MODEL=<model-name>
 ```
 
-Or install Ollama on your host and keep `OLLAMA_BASE_URL=http://localhost:11434`. Design: [docs/ai.md](docs/ai.md).
+Or install Ollama on your host and keep `OLLAMA_BASE_URL=http://localhost:11434` (with compose, also set
+`COMPOSE_OLLAMA_URL=http://host.docker.internal:11434`). Then restart the API; the workspace's AI buttons and `/ai` come
+alive. Everything else works without it. Details, limits and known limitations: [docs/ai.md](docs/ai.md).
 
 ## Development
 
@@ -174,7 +177,7 @@ The e2e suite registers many users from one IP; start the API with relaxed rate 
 
 [architecture](docs/architecture.md) · [problems](docs/problems.md) · [database](docs/database.md) · [api](docs/api.md) ·
 [authentication](docs/authentication.md) · [security](docs/security.md) · [judge](docs/judge.md) (design) ·
-[ai](docs/ai.md) (design) · [contests](docs/contests.md) (design) · [deployment](docs/deployment.md) ·
+[ai](docs/ai.md) · [contests](docs/contests.md) (design) · [deployment](docs/deployment.md) ·
 [troubleshooting](docs/troubleshooting.md)
 
 ## Roadmap
@@ -185,12 +188,30 @@ The e2e suite registers many users from one IP; start the API with relaxed rate 
 | 2 | Problem platform: problems, tags, search/filters, Monaco editor, admin problem editor, 30 original problems | **Done** |
 | 3 | SahuJudge: submissions, Redis/Celery queue, sandboxes (Python, C++, JS), verdicts, WebSocket updates | **Done** |
 | 4 | Profiles, statistics, streaks, achievements, activity calendar, dashboard stats | **Done** |
-| 5 | SahuCodeX AI: hints, explain, review, debug, chat, streaming, rate limits | Next |
-| 6 | Contests: creation, registration, timer, scoring, penalties, live standings | |
+| 5 | SahuCodeX AI: hints, explain, review, debug, chat, streaming, rate limits | **Done** |
+| 6 | Contests: creation, registration, timer, scoring, penalties, live standings | Next |
 | 7 | Community: discussions, voting, reports, notifications, moderation | |
 | 8 | RAG, recommendations, caching, analytics, Prometheus/Grafana, performance | |
 
 ### Known limitations / TODO
+
+**Phase 5**
+
+* **AI quality is the model's quality.** Verified with a 3B-parameter model, which is fast on a laptop but fallible: an
+  early review invented two bugs and called correct code "correctly implemented". The review prompt was tightened
+  (mandatory "I can't run this code" opener, bugs only with a concrete failing input, verdict words banned) and re-checked
+  against the real model, but that lowers the risk rather than removing it — which is why AI output is always labelled a
+  suggestion and the judge decides. Use a larger model if you can. Details: [docs/ai.md](docs/ai.md#known-limitations).
+* **The Docker Compose wiring for Ollama was never booted** (no Docker here): the `ollama` service and the API's override
+  to reach it by name parse as valid YAML, but were not run. Host-installed Ollama with the host-run API is what was tested.
+* AI Review may show a corrected solution in its "Possible optimisations" section; only AI Hint is spoiler-restricted.
+* Hints given this visit are remembered by the page, not the server — a reload restarts the hint sequence.
+* The first request after Ollama has been idle is slow (the model reloads; ~9 s for a 3B model here). Raise
+  `AI_REQUEST_TIMEOUT` for larger models.
+* One shared AI rate budget (`RATE_LIMIT_AI`) rather than per-feature; usage rows are recorded but nothing reads them until
+  phase 8's analytics.
+* The **Debugger** is a chat quick-start template, not a separate endpoint; **RAG** (Qdrant/Chroma) is not built (phase 8).
+* No GPU passthrough block in the compose file.
 
 **Phase 4**
 
@@ -214,7 +235,6 @@ The e2e suite registers many users from one IP; start the API with relaxed rate 
   run individually (the worker pipeline against a trusted local sandbox double, the exact `docker` CLI arguments
   against a scripted fake). CI now runs the real Docker-backed tests on every push (not yet exercised here — no CI has
   run yet, see Phase 1 below). Full details: [docs/judge.md](docs/judge.md#what-has-not-been-run-locally).
-* **AI Hint, AI Review and Explain remain placeholders** until phase 5.
 * `POST /api/run`'s `mode=samples` (run every public example at once, capturing each one) is implemented and tested,
   but the workspace's Run button currently always uses `mode=custom` against whatever is in the input box — the
   console UI would need a second affordance to expose the samples mode.

@@ -100,6 +100,22 @@ it is immediately marked `FAILED` / `SYSTEM_ERROR` rather than staying `QUEUED` 
 succeeds from wherever the worker runs. **Never** set `SANDBOX_DOCKER_HOST` to the same daemon that runs the
 application containers — see [judge.md](judge.md#the-docker-socket-problem-and-the-decision-made).
 
+## AI says "not configured", or `503 AI_UNAVAILABLE`
+
+* *"not configured … Set OLLAMA_MODEL"* — no model is chosen. Pull one (`ollama pull <model>`), set `OLLAMA_MODEL` in `.env`
+  to its exact name (`ollama list` shows it) and restart the API. Check with `GET /api/ai/status`.
+* *"could not answer right now"* / *"stopped responding"* — the API could not reach Ollama, or the model is not pulled, or it
+  timed out. From the API's host: `curl $OLLAMA_BASE_URL/api/tags` should list your model. Under docker compose the API
+  reaches the `ollama` service (start it with `--profile ai`); for Ollama running on the host set
+  `COMPOSE_OLLAMA_URL=http://host.docker.internal:11434`. `localhost` inside a container is the container itself, so a
+  `.env` value of `http://localhost:11434` cannot work there — compose overrides it for that reason.
+* The AI worked, then the first request after a pause is very slow, or times out — Ollama unloads an idle model and reloads
+  it on the next call. Raise `AI_REQUEST_TIMEOUT` (larger models can need minutes on CPU), or `OLLAMA_KEEP_ALIVE` on the
+  Ollama side.
+* `429` on AI — `RATE_LIMIT_AI` (default 20/hour per user, shared by every AI feature).
+* Streaming replies arrive all at once — something between the browser and the API is buffering. Caddy does not (tested);
+  another proxy may need response buffering off for `text/event-stream` (`proxy_buffering off` in nginx).
+
 ## Shell script fails in the container (`^M: bad interpreter`)
 
 A Windows checkout converted line endings. `.gitattributes` forces LF for `*.sh`, and the API Dockerfile strips `\r`

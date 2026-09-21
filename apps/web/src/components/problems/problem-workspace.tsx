@@ -250,7 +250,7 @@ function Workspace({ problem, languages }: { problem: ProblemDetail; languages: 
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 md:grid-cols-[minmax(340px,42%)_1fr]">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] md:grid-cols-[minmax(340px,42%)_1fr]">
         <section
           aria-label="Problem statement"
           className={cn("min-h-0 overflow-y-auto border-r", mobileTab !== "problem" && "hidden md:block")}
@@ -258,7 +258,7 @@ function Workspace({ problem, languages }: { problem: ProblemDetail; languages: 
           <ProblemStatement problem={problem} />
         </section>
 
-        <div className={cn("flex min-h-0 flex-col", mobileTab === "problem" && "hidden md:flex")}>
+        <div className={cn("flex min-h-0 min-w-0 flex-col", mobileTab === "problem" && "hidden md:flex")}>
           <div className={cn("min-h-0 flex-1", mobileTab === "console" && "hidden md:block")}>
             <EditorPane
               key={`${problem.slug}:${language}`}

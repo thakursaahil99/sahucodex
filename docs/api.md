@@ -88,12 +88,23 @@ keep deep pages cheap.
 | `GET /api/run/{id}` | user (owner only) | The run's status and result; expires after `RUN_RESULT_TTL` |
 | `POST /api/ws/ticket` | user | A single-use, 30-second ticket for the event socket (browsers cannot set an `Authorization` header on a WebSocket) |
 | `GET /api/ws?ticket=…` (WebSocket, root path — not under `/api`'s HTTP middleware) | ticket | `submission.queued/running/completed/failed`, `run.running/completed/failed` for the ticket's own user only |
+| `GET /api/ai/status` | user | `{configured, model}` — whether the server has a model chosen (no model call) |
+| `POST /api/ai/hint` | user | One progressive hint for a problem + code → `{feature, content, model}`. Body: `problem_slug`, `language`, `code`, `previous_hints[]` |
+| `POST /api/ai/explain`, `POST /api/ai/review` | user | Explain / review code, optionally with a problem (`problem_slug`) → `{feature, content, model}` |
+| `GET/POST /api/ai/conversations` | user | List mine / create one with its first message **and stream the reply** (`text/event-stream`) |
+| `GET/PATCH/DELETE /api/ai/conversations/{id}` | user (owner only) | Read with messages / rename / delete. A stranger's id is the same 404 as a missing one |
+| `POST /api/ai/conversations/{id}/messages` | user (owner only) | Send a message and stream the reply |
+
+The AI routes answer `503 AI_UNAVAILABLE` when no model is configured or the model server cannot be reached, `429` (with
+`Retry-After`) past `RATE_LIMIT_AI`, `422 AI_INPUT_TOO_LARGE` over `AI_MAX_PROMPT_CHARS`, and `409`
+`TOO_MANY_CONVERSATIONS` / `CONVERSATION_FULL` at the conversation limits. Streaming events and the request flow are in
+[ai.md](ai.md#streaming-protocol).
 
 Operational endpoints (root, not `/api`, not reachable through the proxy): `GET /health` (liveness), `GET /ready`
 (PostgreSQL + Redis; `503` with per-dependency `ok`/`unavailable` and no internals), `GET /metrics` (Prometheus, optional
 `METRICS_TOKEN` bearer).
 
-Further endpoints (`/api/contests`, `/api/ai/*`, `/api/leaderboard`, `/api/notifications`) arrive with their phases,
+Further endpoints (`/api/contests`, `/api/leaderboard`, `/api/notifications`) arrive with their phases,
 following the paths in the project specification.
 
 ## Limits

@@ -67,6 +67,11 @@ Nothing below is optional. With `APP_ENV=production` the API refuses to start if
       convenience. For production, run a genuinely separate, dedicated Docker host for it, point `SANDBOX_DOCKER_HOST`
       at it, and delete the `sandbox` service from `docker-compose.yml`. Never let it share a host — let alone a Docker
       daemon or socket — with anything that holds application secrets. See [judge.md](judge.md).
+- [ ] **SahuCodeX AI (optional)**: run Ollama on a machine with enough RAM/GPU for your chosen model, set `OLLAMA_MODEL`
+      and point the API at it (`OLLAMA_BASE_URL`; under compose, `COMPOSE_OLLAMA_URL`). Keep it off the public internet —
+      it has no authentication of its own; only the API should reach it. Size `AI_REQUEST_TIMEOUT` and `RATE_LIMIT_AI`
+      to your hardware: one model serves every user. Leaving `OLLAMA_MODEL` empty disables the feature cleanly.
+      See [ai.md](ai.md). (The compose `ollama` service has no GPU block; add one for NVIDIA per Ollama's Docker docs.)
 
 ## Migrations and seeding
 
@@ -78,6 +83,10 @@ The API container runs `alembic upgrade head` on start (`RUN_MIGRATIONS=true` by
 (`docker compose run --rm -e RUN_MIGRATIONS=true backend true`) and set `RUN_MIGRATIONS=false` on the replicas.
 
 ## Scaling notes
+
+**AI**: a streamed reply holds one HTTP connection open for as long as the model takes, so size your API worker count for
+that; the model server itself is the throughput ceiling (Ollama queues concurrent requests). If another proxy sits in
+front of the API, turn response buffering off for `text/event-stream` or replies will arrive all at once (Caddy is fine).
 
 The API is stateless (state lives in PostgreSQL and Redis) and can be replicated behind Caddy. Rate-limit counters and
 the revoked-session denylist are in Redis, so they are shared across replicas. The judge worker scales independently:

@@ -38,6 +38,9 @@ purpose: a security document that overstates the system is worse than none.
 | Judge abuse controls | Per-user rate limits on submit and run; a hard cap on submissions a user may have queued/running at once; source and custom-input size caps; a reaper closes jobs a dead worker abandoned so nothing hangs forever | `apps/api/tests/test_submissions_api.py`; `apps/judge/tests/test_pipeline.py::test_the_reaper_*` |
 | Real-time events | The event WebSocket is opened only with a single-use, 30-second, server-minted ticket (stored hashed) bound to one user; a socket only ever receives that user's own channel; the Origin is checked before the ticket is even redeemed | `apps/api/tests/test_submissions_ws.py` |
 | Streaks and achievements | Written only by SahuJudge after judging, never accepted from a client; the achievement catalogue seeded by the migration and the code's own `CATALOG` are cross-checked by a test so they cannot silently drift apart, and `user_achievements` is foreign-keyed to it (a bug that tried to award an unknown key would fail loudly, not silently) | `apps/api/tests/test_profiles.py`, `apps/judge/tests/test_profiles.py`, `apps/api/tests/test_migrations.py` |
+| AI: hidden data | The model is only ever given a `ProblemPublic` (the public API's own shape — no field for hidden tests or the editorial), resolved server-side from a slug; the client cannot send problem text or a system prompt (`extra="forbid"`) | `apps/api/tests/test_ai.py` |
+| AI: abuse and cost | Authentication on every route; one per-user Redis rate limit across all features; input, response-token and time caps; conversation and message limits; a usage row for every request, including failed and abandoned ones | `apps/api/tests/test_ai.py` |
+| AI: output and privacy | Model output is rendered as inert Markdown (no raw HTML, no images, safe links) and never executed or trusted for decisions; conversations are owner-only with the same 404 for a stranger's id; the judge stays the only source of a verdict | `test_ai.py`, `assistant.test.tsx`, `markdown.test.tsx` |
 | Avatar URLs | Same `http(s)`-only rule as `website`/`github_url` (blocks `javascript:`/`data:`); `img-src` allows any HTTPS host since there is no upload yet and images cannot execute script | `apps/api/tests/test_authorization.py` |
 
 ## Trade-offs to be aware of
@@ -50,11 +53,17 @@ purpose: a security document that overstates the system is worse than none.
 * **`style-src 'unsafe-inline'`** is required because Radix UI, Tailwind and Monaco set inline `style` attributes, and
   **`font-src data:`** because Monaco inlines its icon font as a `data:` URI. Neither permits script execution.
 * **Email verification is recorded, not enforced.**
+* **A user can prompt-inject their own chat** ("ignore your rules…"). The blast radius is deliberately just that user:
+  the model has no tools, no database access and no other user's data — only the public problem statement and what the
+  user themselves typed — and its output is inert Markdown. What the model says can never change a verdict, a score, an
+  achievement or a role. The rules in the system prompt shape helpfulness; they are not a security boundary, and the
+  code does not treat them as one.
+* **The AI holds no secrets and the browser holds none of it**: Ollama's URL and the model name stay on the server
+  (`GET /api/ai/status` returns only the model's name, to signed-in users).
 
 ## Planned (not implemented yet — do not assume)
 
 * File uploads (avatars): size/type/name validation by content, not extension; storage abstraction (local / MinIO).
-* AI abuse controls (phase 5): per-user limits, prompt/response caps, timeouts, authentication required.
 * Prometheus alerting and dependency scanning in CI.
 
 ## What has not been verified

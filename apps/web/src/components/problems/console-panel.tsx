@@ -50,7 +50,7 @@ export function ConsolePanel({
   const expanded = !collapsible || open;
 
   return (
-    <section aria-label="Console" className={cn("flex min-h-0 flex-col border-t bg-card", className)}>
+    <section aria-label="Console" className={cn("flex min-h-0 min-w-0 flex-col border-t bg-card", className)}>
       <div className="flex items-center gap-2 px-3 py-1.5">
         <Terminal className="size-4 text-muted-foreground" aria-hidden />
         <h2 className="text-sm font-medium">Console</h2>
@@ -69,12 +69,13 @@ export function ConsolePanel({
       </div>
 
       {expanded && (
-        <Tabs value={tab} onValueChange={(v) => onTabChange(v as ConsoleTab)} className="flex min-h-0 flex-1 flex-col px-3 pb-3">
-          <TabsList className="h-9 w-fit self-start">
-            <TabsTrigger value="input">Test input</TabsTrigger>
-            <TabsTrigger value="output">Output</TabsTrigger>
-            <TabsTrigger value="results">Test results</TabsTrigger>
-            <TabsTrigger value="ai">SahuCodeX AI</TabsTrigger>
+        <Tabs value={tab} onValueChange={(v) => onTabChange(v as ConsoleTab)} className="flex min-h-0 min-w-0 flex-1 flex-col px-3 pb-3">
+          {/* Four tabs are wider than a phone: the strip scrolls inside itself instead of widening the page. */}
+          <TabsList className="h-9 max-w-full self-start justify-start overflow-x-auto">
+            <TabsTrigger value="input" className="shrink-0">Test input</TabsTrigger>
+            <TabsTrigger value="output" className="shrink-0">Output</TabsTrigger>
+            <TabsTrigger value="results" className="shrink-0">Test results</TabsTrigger>
+            <TabsTrigger value="ai" className="shrink-0">SahuCodeX AI</TabsTrigger>
           </TabsList>
 
           <TabsContent value="input" className="mt-2 flex min-h-0 flex-1 flex-col gap-2">
