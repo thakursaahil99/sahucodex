@@ -79,7 +79,17 @@ def create_engine_from_settings(settings: Settings) -> AsyncEngine:
             echo=settings.db_echo,
         )
     if settings.db_serverless:
-        return create_async_engine(settings.database_url, poolclass=NullPool, echo=settings.db_echo)
+        # Hosted poolers (Neon's PgBouncer) multiplex connections, so asyncpg must not keep named prepared statements.
+        return create_async_engine(
+            settings.database_url,
+            poolclass=NullPool,
+            connect_args={
+                "statement_cache_size": 0,
+                "prepared_statement_cache_size": 0,
+                "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
+            },
+            echo=settings.db_echo,
+        )
     return create_async_engine(
         settings.database_url,
         pool_size=settings.db_pool_size,
