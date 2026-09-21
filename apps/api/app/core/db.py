@@ -13,7 +13,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import Dialect
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.pool import NullPool, StaticPool
 from sqlalchemy.types import TypeDecorator
 
 from app.core.config import Settings
@@ -78,6 +78,8 @@ def create_engine_from_settings(settings: Settings) -> AsyncEngine:
             connect_args={"check_same_thread": False},
             echo=settings.db_echo,
         )
+    if settings.db_serverless:
+        return create_async_engine(settings.database_url, poolclass=NullPool, echo=settings.db_echo)
     return create_async_engine(
         settings.database_url,
         pool_size=settings.db_pool_size,

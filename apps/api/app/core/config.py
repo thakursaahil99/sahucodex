@@ -71,6 +71,8 @@ class Settings(BaseSettings):
     db_pool_size: int = 10
     db_max_overflow: int = 10
     db_echo: bool = False
+    # Serverless hosts (Vercel) freeze the process between requests: no connection pool, one connection per use.
+    db_serverless: bool = False
 
     # --- Auth ----------------------------------------------------------------------------
     jwt_secret: SecretStr
@@ -118,6 +120,9 @@ class Settings(BaseSettings):
     max_inflight_submissions: int = 3
     # Jobs that stay QUEUED/RUNNING longer than this are failed by the reaper (the worker died or the queue lost them).
     judge_stale_after: Duration = 15 * 60
+    # False where no judge worker runs (e.g. the free serverless deployment): submitting then fails cleanly with 503
+    # JUDGE_UNAVAILABLE instead of leaving submissions queued forever.
+    judge_enabled: bool = True
     run_result_ttl: Duration = 10 * 60
     ws_ticket_ttl: Duration = 30
     # Sandbox (used by the judge worker only; the API never executes code).
@@ -162,8 +167,23 @@ class Settings(BaseSettings):
     def _normalise_database_url(cls, value: str) -> str:
         for prefix in ("postgresql://", "postgres://"):
             if value.startswith(prefix):
-                return "postgresql+asyncpg://" + value[len(prefix) :]
-        return value
+                value = "postgresql+asyncpg://" + value[len(prefix) :]
+                break
+        if not value.startswith("postgresql+asyncpg://"):
+            return value
+        # Hosted Postgres (Neon, ...) hands out libpq-style URLs. asyncpg rejects `sslmode`/`channel_binding`
+        # and wants `ssl` instead.
+        url, _, query = value.partition("?")
+        params = [pair for pair in query.split("&") if pair]
+        kept: list[str] = []
+        for pair in params:
+            key, _, val = pair.partition("=")
+            if key == "sslmode":
+                if val not in ("disable", "allow"):
+                    kept.append("ssl=require")
+            elif key != "channel_binding":
+                kept.append(pair)
+        return url + ("?" + "&".join(kept) if kept else "")
 
     @field_validator("cors_origins", mode="before")
     @classmethod

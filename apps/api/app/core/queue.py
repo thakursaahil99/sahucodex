@@ -62,7 +62,16 @@ class CeleryJobQueue:
             raise QueueUnavailableError(str(exc)) from exc
 
 
+class UnavailableJobQueue:
+    """Stands in when no worker is deployed: callers get the same clean error as a broker outage."""
+
+    async def enqueue(self, task: str, *args: str, queue: str) -> None:
+        raise QueueUnavailableError("no job worker is deployed (JUDGE_ENABLED=false)")
+
+
 def build_job_queue(settings: Settings) -> JobQueue:
+    if not settings.judge_enabled:
+        return UnavailableJobQueue()
     return CeleryJobQueue(settings.redis_url)
 
 
