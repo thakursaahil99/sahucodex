@@ -3,7 +3,8 @@ name = "sahucodex-api"
 version = "0.1.0"
 description = "SahuCodeX FastAPI backend"
 requires-python = ">=3.12"
-# Keep in sync with requirements.txt (Docker installs that; Vercel reads this list).
+# Keep in sync with requirements.txt (Docker installs that; Vercel reads this list). `vercel` is only used by the
+# serverless judge backend (JUDGE_BACKEND=vercel) and is deliberately not in requirements.txt.
 dependencies = [
   "fastapi==0.141.1",
   "uvicorn[standard]==0.53.0",
@@ -21,6 +22,7 @@ dependencies = [
   "prometheus-client==0.26.0",
   "celery==5.6.3",
   "httpx==0.28.1",
+  "vercel==0.11.3",
 ]
 
 [tool.pytest.ini_options]

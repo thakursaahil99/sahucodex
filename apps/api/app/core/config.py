@@ -123,6 +123,10 @@ class Settings(BaseSettings):
     # False where no judge worker runs (e.g. the free serverless deployment): submitting then fails cleanly with 503
     # JUDGE_UNAVAILABLE instead of leaving submissions queued forever.
     judge_enabled: bool = True
+    # `celery`: API enqueues, a worker with a Docker sandbox judges (docker compose). `vercel`: no worker - the API
+    # judges inside the request, running the code in a Vercel Sandbox microVM (needs a snapshot, see docs/judge.md).
+    judge_backend: Literal["celery", "vercel"] = "celery"
+    vercel_sandbox_snapshot: str = ""
     run_result_ttl: Duration = 10 * 60
     ws_ticket_ttl: Duration = 30
     # Sandbox (used by the judge worker only; the API never executes code).

@@ -69,9 +69,38 @@ class UnavailableJobQueue:
         raise QueueUnavailableError("no job worker is deployed (JUDGE_ENABLED=false)")
 
 
+class InlineJobQueue:
+    """Serverless mode (JUDGE_BACKEND=vercel): no broker, no worker. `enqueue` runs the judge to completion before it
+    returns. The API process only orchestrates: submitted code still runs exclusively inside a remote Vercel Sandbox
+    microVM (no network, destroyed afterwards), never in this process. See docs/judge.md."""
+
+    def __init__(self, settings: Settings) -> None:
+        self._settings = settings
+
+    async def enqueue(self, task: str, *args: str, queue: str) -> None:
+        import uuid
+
+        from sahujudge import pipeline  # lazy: only this backend pulls the judge into the API process
+        from sahujudge.runtime import open_deps
+
+        if task not in (TASK_JUDGE_SUBMISSION, TASK_RUN_CODE):
+            raise QueueUnavailableError(f"the inline judge does not handle {task!r}")
+        try:
+            async with open_deps(self._settings) as deps:
+                if task == TASK_JUDGE_SUBMISSION:
+                    await pipeline.judge_submission(deps, uuid.UUID(args[0]))
+                else:
+                    await pipeline.run_code(deps, args[0])
+        except Exception as exc:
+            log.error("inline_judge_failed", task=task, error=type(exc).__name__)
+            raise QueueUnavailableError(str(exc)) from exc
+
+
 def build_job_queue(settings: Settings) -> JobQueue:
     if not settings.judge_enabled:
         return UnavailableJobQueue()
+    if settings.judge_backend == "vercel":
+        return InlineJobQueue(settings)
     return CeleryJobQueue(settings.redis_url)
 
 

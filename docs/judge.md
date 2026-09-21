@@ -166,3 +166,22 @@ isolation, used only to prove the pipeline's wiring), and all 30 seed problems j
 the Docker-dependent tests on every push (GitHub's hosted runners ship a usable Docker Engine); run
 `SJX_DOCKER_TESTS=1 python -m pytest -m docker` locally once Docker is available, and see
 [troubleshooting.md](troubleshooting.md) if something differs from what CI sees.
+
+
+## Serverless backend: Vercel Sandbox (`JUDGE_BACKEND=vercel`)
+
+For hosts with no Docker daemon and no long-running worker (the free Vercel deployment), the judge can run inside the API
+request and execute submitted code in a [Vercel Sandbox](https://vercel.com/docs/vercel-sandbox) microVM.
+
+* **Where code runs.** One Firecracker microVM per submission (its own kernel), created from a prepared snapshot with
+  `NetworkPolicy.deny_all()`, no environment variables and no secrets, destroyed in a `finally` (plus a 5-minute lifetime
+  limit as a backstop). User code never runs in the API process. This is the same guarantee as the Docker sandbox; the
+  API process merely *orchestrates* the microVM (`app.core.queue.InlineJobQueue` -> `sahujudge.pipeline`), which is the
+  one place the API imports the judge - and only with this backend.
+* **Same supervisor.** `sahujudge/supervisor.py` is copied into the microVM and speaks the same protocol as in the Docker
+  image; `VercelSession` subclasses `DockerSession` and only replaces the transport.
+* **Snapshot.** Build once (default sandbox image has Python and Node; add g++): create a sandbox, run
+  `sudo apt-get install -y g++ libc6-dev`, take a snapshot with no expiry and put its id in `VERCEL_SANDBOX_SNAPSHOT`.
+* **Trade-offs.** `enqueue` returns after judging, so a submission request takes seconds (sandbox start ~5 s plus ~1.4 s
+  per test case). The free plan allows 10 concurrent sandboxes. There is no WebSocket progress stream on this backend;
+  clients read the final result. Hobby-plan usage limits apply.

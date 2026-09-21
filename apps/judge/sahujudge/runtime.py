@@ -14,7 +14,17 @@ from sahujudge.pipeline import JudgeDeps
 from sahujudge.sandbox import Sandbox
 
 
-def build_sandbox(settings: Settings) -> DockerSandbox:
+def build_sandbox(settings: Settings) -> Sandbox:
+    if settings.judge_backend == "vercel":
+        from sahujudge.vercel_sandbox import VercelSandbox, VercelSandboxConfig
+
+        return VercelSandbox(
+            VercelSandboxConfig(
+                snapshot_id=settings.vercel_sandbox_snapshot,
+                max_source_bytes=settings.submission_max_source_bytes,
+                compile_output_bytes=settings.judge_max_compile_output_bytes,
+            )
+        )
     return DockerSandbox(
         DockerSandboxConfig(
             image=settings.sandbox_image,
