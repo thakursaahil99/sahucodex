@@ -43,6 +43,7 @@ class Submission(Base):
         Index("ix_submissions_user_created", "user_id", "created_at"),
         Index("ix_submissions_user_problem", "user_id", "problem_id", "created_at"),
         Index("ix_submissions_status_created", "status", "created_at"),
+        Index("ix_submissions_contest_user_problem", "contest_id", "user_id", "problem_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -50,6 +51,10 @@ class Submission(Base):
     problem_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("problems.id", ondelete="CASCADE"))
     language_key: Mapped[str] = mapped_column(ForeignKey("programming_languages.key", ondelete="RESTRICT"))
     source_code: Mapped[str] = mapped_column(Text)
+    # Set only when submitted through a contest's own submit path (never client-supplied on the normal one). Scoring
+    # (contests/service.py) reads this plus `created_at` against the contest's [start_time, end_time] window — never
+    # a client-supplied flag — to decide what counts.
+    contest_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("contests.id", ondelete="SET NULL"))
 
     status: Mapped[str] = mapped_column(String(12), default=SubmissionStatus.QUEUED, server_default="QUEUED")
     verdict: Mapped[str | None] = mapped_column(String(24))

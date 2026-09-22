@@ -45,6 +45,16 @@ class ProblemRef:
     memory_limit_mb: int
 
 
+async def resolve_language(db: AsyncSession, language_key: str) -> str:
+    """Shared by every submit path (plain and contest): a language must exist and be enabled."""
+    language = await db.get(ProgrammingLanguage, language_key)
+    if language is None:
+        raise AppError(422, "UNKNOWN_LANGUAGE", f"Unknown language: {language_key}")
+    if not language.is_enabled:
+        raise AppError(422, "LANGUAGE_DISABLED", f"{language.display_name} is not available right now")
+    return language.key
+
+
 async def _resolve(db: AsyncSession, slug: str, language_key: str) -> tuple[ProblemRef, str]:
     row = (
         await db.execute(
@@ -55,12 +65,8 @@ async def _resolve(db: AsyncSession, slug: str, language_key: str) -> tuple[Prob
     ).first()
     if row is None:
         raise not_found("PROBLEM_NOT_FOUND", "Problem not found")
-    language = await db.get(ProgrammingLanguage, language_key)
-    if language is None:
-        raise AppError(422, "UNKNOWN_LANGUAGE", f"Unknown language: {language_key}")
-    if not language.is_enabled:
-        raise AppError(422, "LANGUAGE_DISABLED", f"{language.display_name} is not available right now")
-    return ProblemRef(*row), language.key
+    language_key = await resolve_language(db, language_key)
+    return ProblemRef(*row), language_key
 
 
 def validate_source(settings: Settings, source: str, *, limit: int | None = None) -> None:
@@ -87,12 +93,7 @@ async def _count_tests(db: AsyncSession, problem_id: uuid.UUID, kind: CaseKind |
 # --- submissions ------------------------------------------------------------------------------------------------------
 
 
-async def create_submission(
-    db: AsyncSession, redis: Redis, queue: JobQueue, settings: Settings, user: User, data: SubmissionCreate
-) -> Submission:
-    problem, language_key = await _resolve(db, data.problem_slug, data.language)
-    validate_source(settings, data.source_code)
-
+async def _too_many_pending(db: AsyncSession, settings: Settings, user: User) -> bool:
     horizon = utcnow() - timedelta(seconds=settings.judge_stale_after)
     in_flight = (
         await db.execute(
@@ -105,7 +106,28 @@ async def create_submission(
             )
         )
     ).scalar_one()
-    if in_flight >= settings.max_inflight_submissions:
+    return in_flight >= settings.max_inflight_submissions
+
+
+async def create_and_enqueue(
+    db: AsyncSession,
+    redis: Redis,
+    queue: JobQueue,
+    settings: Settings,
+    user: User,
+    problem: ProblemRef,
+    language_key: str,
+    source_code: str,
+    *,
+    contest_id: uuid.UUID | None = None,
+) -> Submission:
+    """The part every submit path shares: create the durable row, enqueue the job, publish the event.
+
+    Callers resolve `problem`/`language_key` themselves first (the plain path requires `published`; the contest path
+    instead requires contest membership and timing — see contests/service.py), and validate `source_code` themselves
+    (`validate_source`, possibly with a contest-specific size limit) before calling this.
+    """
+    if await _too_many_pending(db, settings, user):
         raise AppError(
             429,
             "TOO_MANY_PENDING_SUBMISSIONS",
@@ -121,9 +143,10 @@ async def create_submission(
         user_id=user.id,
         problem_id=problem.id,
         language_key=language_key,
-        source_code=data.source_code,
+        source_code=source_code,
         status=SubmissionStatus.QUEUED.value,
         total_count=total,
+        contest_id=contest_id,
     )
     db.add(submission)
     await db.commit()  # the row is durable BEFORE the job is enqueued, so a worker can never see an id that is missing
@@ -143,8 +166,22 @@ async def create_submission(
         events.EVENT_QUEUED,
         {"submission_id": str(submission.id), "status": SubmissionStatus.QUEUED.value, "problem_slug": problem.slug},
     )
-    log.info("submission_queued", submission_id=str(submission.id), problem=problem.slug, language=language_key)
+    log.info(
+        "submission_queued",
+        submission_id=str(submission.id),
+        problem=problem.slug,
+        language=language_key,
+        contest_id=str(contest_id) if contest_id else None,
+    )
     return submission
+
+
+async def create_submission(
+    db: AsyncSession, redis: Redis, queue: JobQueue, settings: Settings, user: User, data: SubmissionCreate
+) -> Submission:
+    problem, language_key = await _resolve(db, data.problem_slug, data.language)
+    validate_source(settings, data.source_code)
+    return await create_and_enqueue(db, redis, queue, settings, user, problem, language_key, data.source_code)
 
 
 def _summary(row: tuple[Submission, str, str]) -> SubmissionSummary:
@@ -241,13 +278,23 @@ async def get_submission_detail(db: AsyncSession, user: User, submission_id: uui
 # --- runs -------------------------------------------------------------------------------------------------------------
 
 
-async def create_run(
-    db: AsyncSession, redis: Redis, queue: JobQueue, settings: Settings, user: User, data: RunCreate
+async def run_for(
+    db: AsyncSession,
+    redis: Redis,
+    queue: JobQueue,
+    settings: Settings,
+    user: User,
+    problem: ProblemRef,
+    language_key: str,
+    source_code: str,
+    mode: str,
+    stdin: str | None,
 ) -> str:
-    problem, language_key = await _resolve(db, data.problem_slug, data.language)
-    validate_source(settings, data.source_code)
-    if data.mode == "custom":
-        stdin = data.input or ""
+    """The part every run path shares, once the problem/language are already resolved — see `create_and_enqueue`,
+    the same split for submissions."""
+    validate_source(settings, source_code)
+    if mode == "custom":
+        stdin = stdin or ""
         if len(stdin.encode("utf-8")) > settings.run_max_input_bytes:
             raise AppError(422, "INPUT_TOO_LARGE", f"Input is limited to {settings.run_max_input_bytes // 1024} KiB")
         if "\x00" in stdin:
@@ -260,12 +307,12 @@ async def create_run(
         redis,
         run_id,
         user_id=user.id,
-        mode=data.mode,
+        mode=mode,
         request={
             "problem_slug": problem.slug,
             "language": language_key,
-            "source_code": data.source_code,
-            "input": data.input if data.mode == "custom" else None,
+            "source_code": source_code,
+            "input": stdin if mode == "custom" else None,
         },
         ttl_seconds=settings.run_result_ttl,
     )
@@ -275,6 +322,15 @@ async def create_run(
         await redis.delete(runs.run_key(run_id))
         raise AppError(503, "JUDGE_UNAVAILABLE", "The judge is temporarily unavailable. Please try again.") from exc
     return run_id
+
+
+async def create_run(
+    db: AsyncSession, redis: Redis, queue: JobQueue, settings: Settings, user: User, data: RunCreate
+) -> str:
+    problem, language_key = await _resolve(db, data.problem_slug, data.language)
+    return await run_for(
+        db, redis, queue, settings, user, problem, language_key, data.source_code, data.mode, data.input
+    )
 
 
 async def get_run(redis: Redis, user: User, run_id: str) -> RunOut:

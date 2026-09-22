@@ -24,6 +24,7 @@ from app.modules.admin.router import router as admin_router
 from app.modules.ai.provider import AiProvider, build_ai_provider
 from app.modules.ai.router import router as ai_router
 from app.modules.auth.router import router as auth_router
+from app.modules.contests.router import router as contests_router
 from app.modules.health.router import router as health_router
 from app.modules.problems.router import router as problems_router
 from app.modules.profiles.router import router as profiles_router
@@ -110,6 +111,7 @@ def create_app(
     api.include_router(auth_router)
     api.include_router(users_router)
     api.include_router(problems_router)
+    api.include_router(contests_router)
     api.include_router(profiles_router)
     api.include_router(submissions_router)
     api.include_router(ai_router)
