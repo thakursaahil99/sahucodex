@@ -330,26 +330,29 @@ async def test_the_filesystem_and_process_space_are_sealed(sandbox) -> None:
 async def test_a_submission_cannot_read_another_submissions_files(sandbox) -> None:
     """Two sandboxes at once: the second must not be able to see the first's source, secret or work directory.
 
-    The spy's recursive `/**` glob over a whole container filesystem is inherently slow, and it runs while a second
-    container is also being created — two sandboxes at once on a shared, loaded CI runner. Both timeouts are sized
-    generously so the test measures isolation, not the runner's momentary load; a real escape is still caught
-    regardless of how long it takes, since the assertion is on the *content* of the spy's output, not on speed.
+    Each container has its own `--read-only` root and private tmpfs mounts — "no bind mounts, no volumes, no host
+    paths, ever" (docker_sandbox.py). So the only places a leak *could* show up are the writable mounts (`/work`,
+    `/tmp`) and the process list (`/proc`, if the PID namespace were ever shared); everywhere else is the same
+    read-only base image in both containers and can never contain either submission's data. A recursive `/**` glob of
+    the whole filesystem previously scanned all of that identical, irrelevant image content too — slow (9-45s+ on a
+    loaded CI runner, timing out) without checking anything a scoped scan doesn't already cover.
     """
     secret = "FIRST-SUBMISSIONS-SECRET-3c9e"
-    holder = f"import time\nSECRET = {secret!r}\ntime.sleep(20)\n"
+    holder = f"import time\nSECRET = {secret!r}\ntime.sleep(8)\n"
     spy = (
         "import glob, os\n"
         "found = []\n"
-        "for path in glob.glob('/**/main.py', recursive=True) + glob.glob('/proc/[0-9]*/cmdline'):\n"
+        "for path in glob.glob('/work/**', recursive=True) + glob.glob('/tmp/**', recursive=True) "
+        "+ glob.glob('/proc/[0-9]*/cmdline'):\n"
         "    try:\n"
-        f"        if {secret!r} in open(path).read(): found.append(path)\n"
+        f"        if os.path.isfile(path) and {secret!r} in open(path).read(): found.append(path)\n"
         "    except OSError:\n"
         "        pass\n"
         "print('blocked' if not found else 'ESCAPED ' + ' '.join(found))\n"
     )
-    first = asyncio.create_task(judge(sandbox, holder, tests=[("", "")], time_limit_ms=25_000))
+    first = asyncio.create_task(judge(sandbox, holder, tests=[("", "")], time_limit_ms=10_000))
     await asyncio.sleep(1.5)  # the first sandbox is up and running its program
-    report = await judge(sandbox, spy, tests=[("", "blocked\n")], time_limit_ms=15_000)
+    report = await judge(sandbox, spy, tests=[("", "blocked\n")], time_limit_ms=5_000)
     assert report.verdict is Verdict.ACCEPTED
     await first
 
