@@ -3,8 +3,8 @@
 Idempotent upsert (not a straight bulk_insert) so it is safe to run against a database that already has some of
 these rows from manual testing, and the downgrade only removes the rows it added.
 
-Revision ID: 0007
-Revises: 0006
+Revision ID: 0006_lang
+Revises: 0005
 """
 
 from collections.abc import Sequence
@@ -12,8 +12,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0007"
-down_revision: str | None = "0006"
+revision: str = "0006_lang"
+down_revision: str | None = "0005"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
