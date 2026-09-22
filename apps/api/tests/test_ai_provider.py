@@ -87,6 +87,21 @@ async def test_stream_chat_yields_deltas_and_stops_at_done() -> None:
     assert "".join(chunks) == "Hello"
 
 
+async def test_stream_chat_tolerates_a_trailing_usage_only_chunk_with_empty_choices() -> None:
+    # Seen from real OpenRouter traffic: a final accounting chunk with `"choices": []` before [DONE].
+    def handler(request: httpx.Request) -> httpx.Response:
+        lines = [
+            'data: {"choices": [{"delta": {"content": "Hi"}}]}',
+            'data: {"choices": [], "usage": {"total_tokens": 12}}',
+            "data: [DONE]",
+        ]
+        return httpx.Response(200, text="\n".join(lines) + "\n")
+
+    provider = _provider(handler)
+    chunks = [c async for c in provider.stream_chat(system="s", messages=[("user", "hi")], max_tokens=50, timeout_s=5)]
+    assert "".join(chunks) == "Hi"
+
+
 async def test_stream_chat_raises_on_http_error() -> None:
     provider = _provider(lambda request: httpx.Response(500))
     with pytest.raises(AiUnavailableError):

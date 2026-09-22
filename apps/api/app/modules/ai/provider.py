@@ -175,7 +175,9 @@ class OpenRouterProvider:
                     if data == "[DONE]":
                         return
                     chunk = json.loads(data)
-                    delta = chunk.get("choices", [{}])[0].get("delta", {})
+                    # A trailing usage-only chunk (or any chunk with nothing new) may carry an empty `choices` list.
+                    choices = chunk.get("choices") or []
+                    delta = choices[0].get("delta", {}) if choices else {}
                     content = delta.get("content") or ""
                     if content:
                         yield content

@@ -46,8 +46,18 @@ see [Limitations](#known-limitations).
 # Get a free key at https://openrouter.ai/keys (no card required for the free-tier models)
 # .env:  AI_PROVIDER=openrouter
 #        OPENROUTER_API_KEY=sk-or-v1-...
-#        OPENROUTER_MODEL=meta-llama/llama-3.1-8b-instruct:free   (any OpenRouter model id; ":free" ones cost nothing)
+#        OPENROUTER_MODEL=cohere/north-mini-code:free   (any OpenRouter model id; ":free" ones cost nothing — see below)
+#        AI_MAX_RESPONSE_TOKENS=4000   (see the note right after this block — a reasoning model needs real headroom)
 ```
+
+**OpenRouter's free-tier catalogue is reasoning models, as of writing.** Every `:free` model tried (2026-09) streams a
+"thinking" pass in a separate `reasoning` field before the actual reply in `content` — this is normal, not a bug, and
+`OpenRouterProvider` already ignores `reasoning` and only ever yields `content`. The consequence is that a low
+`AI_MAX_RESPONSE_TOKENS` (the default, 800, sized for Ollama) can be spent entirely on thinking, leaving zero tokens for
+the reply itself (`finish_reason: "length"` with an empty answer). **Set `AI_MAX_RESPONSE_TOKENS` to at least `4000`
+for OpenRouter** — verified end to end with `cohere/north-mini-code:free`, which reliably returns a clean, direct
+answer at that ceiling (see [What was run](#what-was-run)). Pick any other `:free` model the same way: send it a test
+prompt and check the reply isn't empty before relying on it.
 
 Settings (all in `.env.example`): `AI_PROVIDER` (`ollama` | `openrouter` | `none`), `OLLAMA_BASE_URL`, `OLLAMA_MODEL`,
 `OPENROUTER_BASE_URL` (default `https://openrouter.ai/api/v1`), `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`,
@@ -150,6 +160,13 @@ model configured but Ollama unreachable) — both give the documented clean erro
 **Not run:** the Docker Compose `ollama` service and the compose override that points the API at it (no Docker in the
 environment this was built in). The YAML parses and the logic is the standard compose-DNS pattern, but it has not been
 booted. No CI has run yet.
+
+**OpenRouter, separately (2026-09):** `OpenRouterProvider.generate()` and `.stream_chat()` verified against the real
+API with `cohere/north-mini-code:free` — a non-streaming call, a streaming call, and the reasoning/`max_tokens`
+interaction described above (confirmed at `max_tokens=4000` the model returns a complete, correct, non-empty reply
+over both call shapes; confirmed at the previous default, 800, several free models return an empty reply cut off
+mid-thought). 9 unit tests (provider selection, wire format, the empty-`choices` streaming edge case) run against
+`httpx.MockTransport`, no real network, alongside the full 443-test API suite.
 
 ## Known limitations
 
