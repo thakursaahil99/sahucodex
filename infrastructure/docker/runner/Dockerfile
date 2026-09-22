@@ -15,7 +15,7 @@ COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 COPY --from=golang:1.23-bookworm /usr/local/go /usr/local/go
 ENV PATH="/usr/local/go/bin:${PATH}"
 # .NET SDK: the official image's install, copied in (its own base is not Debian-slim-compatible to install from apt).
-COPY --from=mcr.microsoft.com/dotnet/sdk:8.0-bookworm-slim /usr/share/dotnet /usr/share/dotnet
+COPY --from=mcr.microsoft.com/dotnet/sdk:10.0-bookworm-slim /usr/share/dotnet /usr/share/dotnet
 ENV PATH="/usr/share/dotnet:${PATH}" DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
 
 RUN apt-get update \
@@ -36,16 +36,13 @@ RUN apt-get update \
 COPY supervisor.py /opt/sjx/supervisor.py
 RUN chmod 0644 /opt/sjx/supervisor.py && chmod 0755 /opt/sjx
 
-# esbuild: transpiles TypeScript (no type-checking - a judge wants fast, faithful execution, not a linter).
-COPY esbuild.js /opt/sjx/esbuild.js
-RUN npm install --global --no-fund --no-audit esbuild@0.24.0 \
- && ln -s /usr/local/lib/node_modules/esbuild/bin/esbuild /usr/local/bin/esbuild \
- && chmod 0644 /opt/sjx/esbuild.js
+# TypeScript needs no separate toolchain: Node's own `--experimental-strip-types` (stable since Node 22, see the
+# `typescript` LanguageSpec) erases type syntax and runs the result directly.
 
 # An empty console project for C#: `dotnet build` needs a .csproj; this lets it build a lone Program.cs offline
 # (`--no-restore`, so no network call in the sandbox). Warmed once so the first real submission doesn't pay for it.
 RUN mkdir -p /work \
- && printf '<Project Sdk="Microsoft.NET.Sdk">\n  <PropertyGroup>\n    <OutputType>Exe</OutputType>\n    <TargetFramework>net8.0</TargetFramework>\n    <AssemblyName>sjx</AssemblyName>\n    <Nullable>enable</Nullable>\n    <InvariantGlobalization>true</InvariantGlobalization>\n  </PropertyGroup>\n</Project>\n' > /work/sjx.csproj \
+ && printf '<Project Sdk="Microsoft.NET.Sdk">\n  <PropertyGroup>\n    <OutputType>Exe</OutputType>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>sjx</AssemblyName>\n    <Nullable>enable</Nullable>\n    <InvariantGlobalization>true</InvariantGlobalization>\n  </PropertyGroup>\n</Project>\n' > /work/sjx.csproj \
  && echo 'class Program { static void Main() {} }' > /work/Program.cs \
  && dotnet build -c Release /work/sjx.csproj -o /tmp/sjx-warm \
  && rm -rf /work/Program.cs /work/obj /work/bin /tmp/sjx-warm \

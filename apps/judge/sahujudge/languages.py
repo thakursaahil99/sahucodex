@@ -117,16 +117,12 @@ LANGUAGES: dict[str, LanguageSpec] = {
         LanguageSpec(
             key="typescript",
             source_name="main.ts",
-            # Transpiled with esbuild (bundled in the snapshot), then run like plain JS.
-            compile=(
-                "node",
-                "/opt/sjx/esbuild.js",
-                f"{WORKDIR}/main.ts",
-                f"{WORKDIR}/main.js",
-            ),
-            run=("node", f"{WORKDIR}/main.js"),
+            # Node's own type-stripping (stable since Node 22): erases type syntax without checking it and runs the
+            # result directly, no separate compiler/bundler needed. Like esbuild's `transform`, this does not
+            # type-check - which is what a judge wants (fast, faithful-to-Node execution), and matches how
+            # competitive-programming judges have always treated TS as "JS plus types".
+            run=("node", "--no-warnings", "--experimental-strip-types", f"{WORKDIR}/main.ts"),
             time_multiplier=2.0,
-            compile_time_ms=20_000,
             min_container_memory_mb=256,
         ),
         LanguageSpec(
