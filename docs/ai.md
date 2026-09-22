@@ -1,14 +1,17 @@
 # SahuCodeX AI
 
 > Status: **implemented in build phase 5.** Hint, Explain and Review in the problem workspace, and a streaming
-> Assistant chat with saved conversations. Everything runs on a local [Ollama](https://ollama.com) model — no paid API,
-> no key. Verified end to end against a real model (see [What was run](#what-was-run)).
+> Assistant chat with saved conversations. Runs on a local [Ollama](https://ollama.com) model by default — no paid
+> API, no key — or, for a deployment with no machine to run Ollama on (e.g. this platform's own free Vercel
+> deployment), [OpenRouter](https://openrouter.ai) with a free-tier model and its own API key. Verified end to end
+> against a real model on both providers (see [What was run](#what-was-run)).
 
 ## Principles
 
-* **Local and open-source first.** The one provider implemented is Ollama. `AiProvider`
-  (`apps/api/app/modules/ai/provider.py`) is a small protocol, so another local provider would be a new class, never a
-  rewrite of the callers.
+* **Local and open-source first, hosted as an opt-in fallback.** Ollama is the default and needs no key. `AiProvider`
+  (`apps/api/app/modules/ai/provider.py`) is a small protocol; `OpenRouterProvider` is the one hosted implementation,
+  selected only by `AI_PROVIDER=openrouter` and configured only by its own `OPENROUTER_API_KEY` — nothing else
+  changes providers implicitly, and a further provider would be a new class, never a rewrite of the callers.
 * **No hardcoded model.** `OLLAMA_MODEL` names whatever model you have pulled. Empty means "none chosen": every AI
   endpoint answers `503 AI_UNAVAILABLE` immediately, without calling anything, and the rest of the platform is unaffected.
 * **Fails cleanly, never fabricates.** An unreachable server, a missing model or a timeout is a structured
@@ -38,10 +41,21 @@ Then restart the API. `GET /api/ai/status` reports `{"configured": true, "model"
 chat works; a small one (~3B parameters) answers in seconds on a laptop but is noticeably less reliable than a large one —
 see [Limitations](#known-limitations).
 
-Settings (all in `.env.example`): `AI_PROVIDER`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `AI_REQUEST_TIMEOUT` (default 60 s —
-the first call after the model has been idle includes loading it, which can be much slower), `AI_MAX_PROMPT_CHARS`
-(8000), `AI_MAX_RESPONSE_TOKENS` (800), `AI_MAX_CONVERSATIONS` (50), `AI_MAX_MESSAGES_PER_CONVERSATION` (100),
-`RATE_LIMIT_AI` (20/hour per user).
+```bash
+# Option C — OpenRouter (hosted, for a deployment with no Ollama machine)
+# Get a free key at https://openrouter.ai/keys (no card required for the free-tier models)
+# .env:  AI_PROVIDER=openrouter
+#        OPENROUTER_API_KEY=sk-or-v1-...
+#        OPENROUTER_MODEL=meta-llama/llama-3.1-8b-instruct:free   (any OpenRouter model id; ":free" ones cost nothing)
+```
+
+Settings (all in `.env.example`): `AI_PROVIDER` (`ollama` | `openrouter` | `none`), `OLLAMA_BASE_URL`, `OLLAMA_MODEL`,
+`OPENROUTER_BASE_URL` (default `https://openrouter.ai/api/v1`), `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`,
+`AI_REQUEST_TIMEOUT` (default 60 s — Ollama's first call after the model has been idle includes loading it, which can
+be much slower), `AI_MAX_PROMPT_CHARS` (8000), `AI_MAX_RESPONSE_TOKENS` (800), `AI_MAX_CONVERSATIONS` (50),
+`AI_MAX_MESSAGES_PER_CONVERSATION` (100), `RATE_LIMIT_AI` (20/hour per user). With `AI_PROVIDER=openrouter`,
+`ai_configured` requires **both** `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` — either alone still answers
+`503 AI_UNAVAILABLE`.
 
 ## Features
 

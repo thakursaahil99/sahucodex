@@ -145,14 +145,19 @@ class Settings(BaseSettings):
     judge_max_tests: int = 200
 
     # --- SahuCodeX AI --------------------------------------------------------------------
-    # No provider is a paid API; Ollama (local, open-source) is the only one implemented. AI_PROVIDER exists so a
-    # deployment can name a provider it hasn't configured yet (e.g. during setup) without that being a code change.
-    ai_provider: Literal["ollama", "none"] = "ollama"
+    # Local/open-source first: Ollama needs no key and no paid API. `openrouter` is a hosted fallback for deployments
+    # with no machine to run Ollama on (e.g. this platform's own free Vercel deployment) — same AiProvider protocol,
+    # opt-in, and its key is read only from OPENROUTER_API_KEY (never hardcoded, never logged). AI_PROVIDER exists so
+    # a deployment can name a provider it hasn't configured yet (e.g. during setup) without that being a code change.
+    ai_provider: Literal["ollama", "openrouter", "none"] = "ollama"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = ""  # empty = "no model chosen yet"; every AI endpoint then answers 503 AI_UNAVAILABLE
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_api_key: SecretStr | None = None
+    openrouter_model: str = ""  # empty = "no model chosen yet", same contract as ollama_model
     ai_request_timeout: Duration = 60  # local inference is slow, especially on CPU; still a hard ceiling
     ai_max_prompt_chars: int = 8_000  # per message / code snippet sent to the model
-    ai_max_response_tokens: int = 800  # Ollama's num_predict — bounds both latency and a runaway reply
+    ai_max_response_tokens: int = 800  # Ollama's num_predict / OpenRouter's max_tokens — bounds latency and cost
     ai_max_conversations: int = 50  # per user
     ai_max_messages_per_conversation: int = 100
 
@@ -225,7 +230,11 @@ class Settings(BaseSettings):
 
     @property
     def ai_configured(self) -> bool:
-        return self.ai_provider == "ollama" and bool(self.ollama_model)
+        if self.ai_provider == "ollama":
+            return bool(self.ollama_model)
+        if self.ai_provider == "openrouter":
+            return bool(self.openrouter_model) and self.openrouter_api_key is not None
+        return False
 
 
 @lru_cache
