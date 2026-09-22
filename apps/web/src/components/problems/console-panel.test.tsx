@@ -164,3 +164,16 @@ describe("ConsolePanel — results tab", () => {
     expect(document.body.innerHTML).not.toMatch(/expected_output/i);
   });
 });
+
+describe("ConsolePanel — showAi", () => {
+  it("shows the SahuCodeX AI tab by default", () => {
+    setup();
+    expect(screen.getByRole("tab", { name: "SahuCodeX AI" })).toBeInTheDocument();
+  });
+
+  it("hides the SahuCodeX AI tab entirely when showAi is false, as in a contest", () => {
+    setup({ showAi: false, tab: "input" });
+    expect(screen.queryByRole("tab", { name: "SahuCodeX AI" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/No AI suggestion yet/)).not.toBeInTheDocument();
+  });
+});

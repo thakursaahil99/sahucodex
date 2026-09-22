@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 function format(msLeft: number): string {
   const totalSeconds = Math.max(0, Math.floor(msLeft / 1000));
@@ -26,9 +26,19 @@ export function Countdown({ target, onReach }: { target: string; onReach?: () =>
   }, []);
 
   const targetMs = new Date(target).getTime();
+  // `now` stays >= targetMs on every tick after the target passes, so the effect below re-runs each second forever
+  // unless something remembers "already fired" — a ref survives re-renders without itself triggering one. Reset
+  // when the target itself changes, so reusing one mounted instance for a new deadline can fire again.
+  const reached = useRef(false);
   useEffect(() => {
-    if (now !== null && now >= targetMs) onReach?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per tick that crosses the target, not per onReach identity
+    reached.current = false;
+  }, [targetMs]);
+  useEffect(() => {
+    if (now !== null && now >= targetMs && !reached.current) {
+      reached.current = true;
+      onReach?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per target crossing, not per onReach identity
   }, [now, targetMs]);
 
   if (now === null) return <span aria-hidden>—:—:—</span>;
