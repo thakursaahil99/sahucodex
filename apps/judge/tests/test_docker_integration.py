@@ -337,15 +337,22 @@ async def test_a_submission_cannot_read_another_submissions_files(sandbox) -> No
     the whole filesystem previously scanned all of that identical, irrelevant image content too — slow (9-45s+ on a
     loaded CI runner, timing out) without checking anything a scoped scan doesn't already cover.
     """
-    secret = "FIRST-SUBMISSIONS-SECRET-3c9e"
+    secret = "FIRST-SUBMISSIONS-SECRET-3c9e"  # present, contiguous, in the holder's own on-disk source (below)
     holder = f"import time\nSECRET = {secret!r}\ntime.sleep(8)\n"
+    # The spy must search for `secret` without ever writing it out contiguously in its OWN source: /work/main.py is
+    # itself one of the paths scanned below, and if it contained `secret` as one literal it would always find
+    # itself, making this test pass or fail for a reason that has nothing to do with sandbox isolation. Splitting the
+    # needle across two literals joined at runtime keeps the *value* searched for identical while keeping the two
+    # halves apart everywhere the spy's own source is read as text.
+    half = len(secret) // 2
     spy = (
         "import glob, os\n"
+        f"needle = {secret[:half]!r} + {secret[half:]!r}\n"
         "found = []\n"
         "for path in glob.glob('/work/**', recursive=True) + glob.glob('/tmp/**', recursive=True) "
         "+ glob.glob('/proc/[0-9]*/cmdline'):\n"
         "    try:\n"
-        f"        if os.path.isfile(path) and {secret!r} in open(path).read(): found.append(path)\n"
+        "        if os.path.isfile(path) and needle in open(path).read(): found.append(path)\n"
         "    except OSError:\n"
         "        pass\n"
         "print('blocked' if not found else 'ESCAPED ' + ' '.join(found))\n"
