@@ -181,9 +181,16 @@ async def test_an_infinite_loop_is_stopped(sandbox, language, source) -> None:
     ("language", "source"),
     [
         ("python", "blob = 'x' * (1024 * 1024 * 1024)\nprint(len(blob))\n"),
+        # A single giant malloc is the wrong way to test this: the container gets `memory_slack_mb` (128 MB) of real
+        # headroom above the 64 MB limit checked below, so a one-shot 1 GB request can be refused outright by the
+        # allocator/kernel (strict overcommit) instead of growing RSS into the limit — malloc then returns NULL and
+        # memset(NULL, ...) segfaults almost instantly (RUNTIME_ERROR, not MEMORY_LIMIT_EXCEEDED — seen in CI on a real
+        # Docker daemon). Allocate and touch memory incrementally instead, like the JavaScript case below, so RSS is
+        # guaranteed to cross the limit while the process is still alive for the supervisor's RSS watchdog to see.
         (
             "cpp",
-            "#include <cstdlib>\n#include <cstring>\nint main(){ char* p = (char*)malloc(1u<<30); memset(p, 1, 1u<<30); return p[5]; }\n",
+            "#include <cstdlib>\n#include <cstring>\n"
+            "int main(){ for(;;){ char* p = (char*)malloc(1<<20); if(!p) return 1; memset(p, 1, 1<<20); } }\n",
         ),
         ("javascript", "const a = []; while (true) a.push(new Array(1e6).fill(1));\n"),
     ],
@@ -321,9 +328,15 @@ async def test_the_filesystem_and_process_space_are_sealed(sandbox) -> None:
 
 
 async def test_a_submission_cannot_read_another_submissions_files(sandbox) -> None:
-    """Two sandboxes at once: the second must not be able to see the first's source, secret or work directory."""
+    """Two sandboxes at once: the second must not be able to see the first's source, secret or work directory.
+
+    The spy's recursive `/**` glob over a whole container filesystem is inherently slow, and it runs while a second
+    container is also being created — two sandboxes at once on a shared, loaded CI runner. Both timeouts are sized
+    generously so the test measures isolation, not the runner's momentary load; a real escape is still caught
+    regardless of how long it takes, since the assertion is on the *content* of the spy's output, not on speed.
+    """
     secret = "FIRST-SUBMISSIONS-SECRET-3c9e"
-    holder = f"import time\nSECRET = {secret!r}\ntime.sleep(4)\n"
+    holder = f"import time\nSECRET = {secret!r}\ntime.sleep(20)\n"
     spy = (
         "import glob, os\n"
         "found = []\n"
@@ -334,9 +347,9 @@ async def test_a_submission_cannot_read_another_submissions_files(sandbox) -> No
         "        pass\n"
         "print('blocked' if not found else 'ESCAPED ' + ' '.join(found))\n"
     )
-    first = asyncio.create_task(judge(sandbox, holder, tests=[("", "")], time_limit_ms=5000))
+    first = asyncio.create_task(judge(sandbox, holder, tests=[("", "")], time_limit_ms=25_000))
     await asyncio.sleep(1.5)  # the first sandbox is up and running its program
-    report = await judge(sandbox, spy, tests=[("", "blocked\n")], time_limit_ms=3000)
+    report = await judge(sandbox, spy, tests=[("", "blocked\n")], time_limit_ms=15_000)
     assert report.verdict is Verdict.ACCEPTED
     await first
 
