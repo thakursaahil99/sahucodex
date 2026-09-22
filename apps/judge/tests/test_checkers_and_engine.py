@@ -310,7 +310,18 @@ async def test_run_custom_maps_outcomes_without_an_expected_output() -> None:
 
 
 def test_language_table_is_complete_and_uses_fixed_argv() -> None:
-    assert set(LANGUAGES) == {"python", "cpp", "javascript"}
+    assert set(LANGUAGES) == {
+        "python",
+        "cpp",
+        "javascript",
+        "c",
+        "java",
+        "csharp",
+        "go",
+        "rust",
+        "typescript",
+        "php",
+    }
     for spec in LANGUAGES.values():
         for command in (spec.compile, spec.run):
             assert command is None or all(isinstance(part, str) for part in command)

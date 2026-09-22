@@ -69,10 +69,15 @@ def test_each_problem_has_all_required_content(spec: Spec):
     assert 100 <= spec.time_limit_ms <= 10_000 and 16 <= spec.memory_limit_mb <= 1024
 
 
+ALL_LANGUAGES = {"python", "cpp", "javascript", "c", "java", "csharp", "go", "rust", "typescript", "php"}
+
+
 @pytest.mark.parametrize("spec", ALL_PROBLEMS, ids=lambda s: s.slug)
 def test_starter_code_exists_for_every_language_and_python_is_valid(spec: Spec):
     starters = starter_code(spec)
-    assert set(starters) == {"python", "cpp", "javascript"}
+    # A problem with a hand-written `starter_override` (its starter code shows how to use a helper the problem
+    # statement describes, e.g. a supplied linked-list Node) may cover fewer languages than the generic template.
+    assert set(starters) == ({"python", "cpp", "javascript"} if spec.starter_override else ALL_LANGUAGES)
     assert all(code.strip() for code in starters.values())
     compile(starters["python"], f"{spec.slug}.py", "exec")  # must at least be syntactically valid
 

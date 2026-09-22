@@ -108,7 +108,7 @@ def test_upgrade_builds_the_model_schema_and_seeds_roles(alembic_config):
         "user_achievements",
     } <= tables
     assert roles == ["ADMIN", "MODERATOR", "USER"]
-    assert languages == ["cpp", "javascript", "python"]
+    assert languages == ["c", "cpp", "csharp", "go", "java", "javascript", "php", "python", "rust", "typescript"]
     # The migration keeps its own frozen copy of this data (see achievements.py's module docstring for why); this
     # catches the two copies drifting apart in practice, without letting the migration import mutable app code.
     assert achievements == sorted(a.key for a in ACHIEVEMENT_CATALOG)

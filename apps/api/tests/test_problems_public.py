@@ -286,7 +286,18 @@ async def test_languages_and_tag_counts(app, client: AsyncClient):
     await insert_problem(app, "hidden-draft", tags=("array", "graph"), published=False)
 
     languages = (await client.get("/api/languages")).json()
-    assert [lang["key"] for lang in languages] == ["python", "cpp", "javascript"]
+    assert [lang["key"] for lang in languages] == [
+        "python",
+        "cpp",
+        "javascript",
+        "c",
+        "java",
+        "csharp",
+        "go",
+        "rust",
+        "typescript",
+        "php",
+    ]
 
     counts = {t["slug"]: t["problem_count"] for t in (await client.get("/api/tags")).json()}
     assert counts == {"array": 2, "graph": 0}  # drafts are not counted

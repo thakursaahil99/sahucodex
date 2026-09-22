@@ -1,10 +1,13 @@
 """Language runners as data.
 
-Adding a language means adding a toolchain to the runner image (infrastructure/docker/runner/Dockerfile) and one
-`LanguageSpec` here, and enabling its row in `programming_languages` — no judge logic changes.
+Adding a language means adding a toolchain to the runner image (infrastructure/docker/runner/Dockerfile, and for the
+serverless backend the Vercel Sandbox snapshot — see docs/judge.md) and one `LanguageSpec` here, and enabling its row
+in `programming_languages` (database/migrations) — no judge logic changes.
 
 Commands are fixed argument vectors (no shell), so nothing a user submits is ever interpreted as a command.
-Source is written to `/work/<source_name>` inside the sandbox; the compiled program, if any, to `/work/main`.
+Source is written to `/work/<source_name>` inside the sandbox; the compiled program, if any, to `/work/main`
+(`csharp` is the one exception: `dotnet build` needs a project file, so its output is `/work/out/sjx.dll`, and the
+runner image/snapshot must bake an empty console project - `sjx.csproj` - at `/work` for it to build against).
 """
 
 from __future__ import annotations
@@ -65,6 +68,73 @@ LANGUAGES: dict[str, LanguageSpec] = {
             ),
             run=(f"{WORKDIR}/main",),
             min_container_memory_mb=768,
+        ),
+        LanguageSpec(
+            key="c",
+            source_name="main.c",
+            compile=("gcc", "-std=c17", "-O2", "-pipe", "-fmax-errors=20", "-o", f"{WORKDIR}/main", f"{WORKDIR}/main.c"),
+            run=(f"{WORKDIR}/main",),
+            min_container_memory_mb=768,
+        ),
+        LanguageSpec(
+            key="java",
+            source_name="Main.java",
+            # The class file lands next to the source (`-d WORKDIR`); the class must be named `Main`.
+            compile=("javac", "-d", WORKDIR, f"{WORKDIR}/Main.java"),
+            run=("java", "-XX:+UseSerialGC", "-Xshare:auto", "-cp", WORKDIR, "Main"),
+            time_multiplier=2.0,
+            compile_time_ms=30_000,
+            min_container_memory_mb=384,
+        ),
+        LanguageSpec(
+            key="csharp",
+            source_name="Program.cs",
+            # A throwaway console project: `dotnet run` alone needs a restore, which needs network. `dotnet build`
+            # against a prepared project (baked into the snapshot at WORKDIR) only needs to compile this one file.
+            compile=("dotnet", "build", "-c", "Release", "--no-restore", "-o", f"{WORKDIR}/out", f"{WORKDIR}"),
+            run=("dotnet", f"{WORKDIR}/out/sjx.dll"),
+            time_multiplier=1.5,
+            compile_time_ms=30_000,
+            min_container_memory_mb=512,
+        ),
+        LanguageSpec(
+            key="go",
+            source_name="main.go",
+            compile=("go", "build", "-o", f"{WORKDIR}/main", f"{WORKDIR}/main.go"),
+            run=(f"{WORKDIR}/main",),
+            compile_time_ms=30_000,
+            min_container_memory_mb=384,
+            env=(("GOCACHE", "/tmp/sjx-gocache"), ("GOFLAGS", "-mod=mod")),
+        ),
+        LanguageSpec(
+            key="rust",
+            source_name="main.rs",
+            compile=("rustc", "-O", "--edition", "2021", "-o", f"{WORKDIR}/main", f"{WORKDIR}/main.rs"),
+            run=(f"{WORKDIR}/main",),
+            compile_time_ms=30_000,
+            min_container_memory_mb=512,
+        ),
+        LanguageSpec(
+            key="typescript",
+            source_name="main.ts",
+            # Transpiled with esbuild (bundled in the snapshot), then run like plain JS.
+            compile=(
+                "node",
+                "/opt/sjx/esbuild.js",
+                f"{WORKDIR}/main.ts",
+                f"{WORKDIR}/main.js",
+            ),
+            run=("node", f"{WORKDIR}/main.js"),
+            time_multiplier=2.0,
+            compile_time_ms=20_000,
+            min_container_memory_mb=256,
+        ),
+        LanguageSpec(
+            key="php",
+            source_name="main.php",
+            run=("php", f"{WORKDIR}/main.php"),
+            time_multiplier=3.0,
+            min_container_memory_mb=192,
         ),
     )
 }

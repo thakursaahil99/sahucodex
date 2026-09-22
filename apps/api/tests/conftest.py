@@ -152,6 +152,13 @@ async def build_app(outbox: Outbox) -> AsyncIterator[AppFactory]:
                         ("python", "Python 3", "py"),
                         ("cpp", "C++17", "cpp"),
                         ("javascript", "JavaScript (Node.js)", "js"),
+                        ("c", "C17", "c"),
+                        ("java", "Java 21", "java"),
+                        ("csharp", "C# 12", "cs"),
+                        ("go", "Go 1.23", "go"),
+                        ("rust", "Rust (stable)", "rs"),
+                        ("typescript", "TypeScript", "ts"),
+                        ("php", "PHP 8", "php"),
                     ]
                 )
             )

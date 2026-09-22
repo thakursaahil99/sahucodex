@@ -121,4 +121,66 @@ def starter_code(spec: Spec) -> dict[str, str]:
             "}\n\n"
             "process.stdout.write(solve(data));\n"
         ),
+        "typescript": (
+            'const data: string = require("fs").readFileSync(0, "utf8");\n\n'
+            "function solve(data: string): string {\n"
+            f"  // {note}\n"
+            "  // TODO: parse `data`, compute the answer, and return the text to print.\n"
+            '  return "";\n'
+            "}\n\n"
+            "process.stdout.write(solve(data));\n"
+        ),
+        "c": (
+            "#include <stdio.h>\n\n"
+            "int main(void) {\n"
+            f"    // {note}\n"
+            "    // TODO: read the input, compute the answer and print it.\n"
+            "    return 0;\n"
+            "}\n"
+        ),
+        "java": (
+            "import java.util.*;\n"
+            "import java.io.*;\n\n"
+            "public class Main {\n"
+            "    public static void main(String[] args) throws IOException {\n"
+            f"        // {note}\n"
+            "        // TODO: read the input, compute the answer and print it.\n"
+            "    }\n"
+            "}\n"
+        ),
+        "csharp": (
+            "using System;\n\n"
+            "class Program {\n"
+            "    static void Main() {\n"
+            f"        // {note}\n"
+            "        // TODO: read the input, compute the answer and print it.\n"
+            "    }\n"
+            "}\n"
+        ),
+        "go": (
+            "package main\n\n"
+            'import (\n\t"bufio"\n\t"fmt"\n\t"os"\n)\n\n'
+            "func main() {\n"
+            "\treader := bufio.NewReader(os.Stdin)\n"
+            "\t_ = reader\n"
+            f"\t// {note}\n"
+            "\t// TODO: read the input, compute the answer and print it.\n"
+            "\tfmt.Println()\n"
+            "}\n"
+        ),
+        "rust": (
+            "use std::io::{self, Read};\n\n"
+            "fn main() {\n"
+            "    let mut data = String::new();\n"
+            "    io::stdin().read_to_string(&mut data).unwrap();\n"
+            f"    // {note}\n"
+            "    // TODO: parse `data`, compute the answer, and print it.\n"
+            "}\n"
+        ),
+        "php": (
+            "<?php\n"
+            '$data = stream_get_contents(STDIN);\n\n'
+            f"// {note}\n"
+            "// TODO: parse $data, compute the answer, and print it.\n"
+        ),
     }
