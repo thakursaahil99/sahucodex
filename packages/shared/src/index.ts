@@ -46,7 +46,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { label: "Dashboard", href: "/dashboard", available: true, phase: 1 },
   { label: "Problems", href: "/problems", available: true, phase: 2 },
   { label: "Submissions", href: "/submissions", available: true, phase: 3 },
-  { label: "Contests", href: "/contests", available: false, phase: 6 },
+  { label: "Contests", href: "/contests", available: true, phase: 6 },
   { label: "Leaderboard", href: "/leaderboard", available: false, phase: 6 },
   { label: "Discussions", href: "/discussions", available: false, phase: 7 },
   { label: "AI Assistant", href: "/ai", available: true, phase: 5 },

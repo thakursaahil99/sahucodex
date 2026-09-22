@@ -42,7 +42,7 @@ export function AdminOverview() {
           <CardDescription>These sections need features that are not built yet.</CardDescription>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          User management, submissions, contests, discussion moderation, analytics, audit logs and system health.
+          User management, submissions, discussion moderation, analytics, audit logs and system health.
         </CardContent>
       </Card>
     </div>

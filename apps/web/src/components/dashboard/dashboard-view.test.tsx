@@ -105,6 +105,11 @@ describe("DashboardView", () => {
   it("no longer lists SahuCodeX AI as upcoming, now that phase 5 has shipped", () => {
     renderDashboard();
     expect(screen.queryByText("SahuCodeX AI")).not.toBeInTheDocument();
-    expect(screen.getByText("Contests")).toBeInTheDocument(); // what is genuinely still to come
+  });
+
+  it("no longer lists Contests as upcoming, now that phase 6 has shipped", () => {
+    renderDashboard();
+    expect(screen.queryByText("Timed contests with penalties and a live leaderboard.")).not.toBeInTheDocument();
+    expect(screen.getByText("Community")).toBeInTheDocument(); // what is genuinely still to come
   });
 });

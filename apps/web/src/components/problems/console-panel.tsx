@@ -30,6 +30,9 @@ interface ConsolePanelProps {
   ai?: AiOutput | null;
   /** Lets the AI tab link to a chat about this problem. */
   problemSlug?: string;
+  /** False during a contest: AI assistance is off for fairness, so there is nothing to show — the tab itself is
+   * hidden rather than shown empty with buttons that don't exist in that workspace. */
+  showAi?: boolean;
 }
 
 /** Test input, program output, judge results — SahuJudge's three views of one attempt — plus the AI's suggestion. */
@@ -45,6 +48,7 @@ export function ConsolePanel({
   submission,
   ai = null,
   problemSlug,
+  showAi = true,
 }: ConsolePanelProps) {
   const [open, setOpen] = useState(true);
   const expanded = !collapsible || open;
@@ -75,7 +79,7 @@ export function ConsolePanel({
             <TabsTrigger value="input" className="shrink-0">Test input</TabsTrigger>
             <TabsTrigger value="output" className="shrink-0">Output</TabsTrigger>
             <TabsTrigger value="results" className="shrink-0">Test results</TabsTrigger>
-            <TabsTrigger value="ai" className="shrink-0">SahuCodeX AI</TabsTrigger>
+            {showAi && <TabsTrigger value="ai" className="shrink-0">SahuCodeX AI</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="input" className="mt-2 flex min-h-0 flex-1 flex-col gap-2">
@@ -114,9 +118,11 @@ export function ConsolePanel({
             <ResultsTab submission={submission} />
           </TabsContent>
 
-          <TabsContent value="ai" className="mt-2 min-h-0 flex-1 overflow-y-auto">
-            <AiResultTab output={ai} problemSlug={problemSlug} />
-          </TabsContent>
+          {showAi && (
+            <TabsContent value="ai" className="mt-2 min-h-0 flex-1 overflow-y-auto">
+              <AiResultTab output={ai} problemSlug={problemSlug} />
+            </TabsContent>
+          )}
         </Tabs>
       )}
     </section>

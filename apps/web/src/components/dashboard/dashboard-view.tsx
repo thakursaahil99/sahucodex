@@ -23,7 +23,7 @@ import { useProfileStats } from "@/lib/profiles/api";
 import { formatDate } from "@/lib/utils";
 
 const UPCOMING = [
-  { phase: 6, title: "Contests", body: "Timed contests with penalties and a live leaderboard." },
+  { phase: 7, title: "Community", body: "Discussions, voting, reports and moderation." },
 ] as const;
 
 export function DashboardView() {

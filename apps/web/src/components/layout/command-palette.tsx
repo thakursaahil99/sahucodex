@@ -37,7 +37,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     { id: "dashboard", label: "Open dashboard", Icon: LayoutDashboard, group: "Navigate", run: go("/dashboard") },
     { id: "problems", label: "Search problems", Icon: Search, group: "Search", run: go("/problems") },
     { id: "users", label: "Search users", Icon: Users, group: "Search", phase: 7 },
-    { id: "contests", label: "Open contests", Icon: Trophy, group: "Navigate", phase: 6 },
+    { id: "contests", label: "Open contests", Icon: Trophy, group: "Navigate", run: go("/contests") },
     {
       id: "profile",
       label: username ? `Open profile (${username})` : "Open profile",
