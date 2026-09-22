@@ -100,12 +100,22 @@ The AI routes answer `503 AI_UNAVAILABLE` when no model is configured or the mod
 `TOO_MANY_CONVERSATIONS` / `CONVERSATION_FULL` at the conversation limits. Streaming events and the request flow are in
 [ai.md](ai.md#streaming-protocol).
 
+| `GET /api/contests` | – | Published contests, most recent first |
+| `GET /api/contests/{slug}` | – (personalised if signed in) | Title, description, phase, problem labels/points — titles too once running; whether the caller is registered |
+| `POST /api/contests/{slug}/register` | user | Idempotent; `409 CONTEST_ENDED` once it has ended |
+| `GET /api/contests/{slug}/problems/{label}` | – | The problem's statement (via the same `ProblemPublic` the plain API returns — never hidden tests); `404` before `start_time` |
+| `POST /api/contests/{slug}/problems/{label}/submit`, `.../run` | user | Judge a contest solution / run custom input; `403 NOT_REGISTERED` unless registered, `409 CONTEST_ENDED` past `end_time`. Reuses the plain submit/run pipeline verbatim — see [contests.md](contests.md#api) |
+| `GET /api/contests/{slug}/standings` | – | Live ICPC-style standings, computed from `submissions` on every request — never stored |
+| `GET/POST /api/admin/contests` | **ADMIN** | List all (incl. drafts) / create a draft |
+| `GET/PUT /api/admin/contests/{id}` | **ADMIN** | Full detail / replace — `409 CONTEST_ALREADY_STARTED` once `start_time` has passed |
+| `POST /api/admin/contests/{id}/{publish,unpublish}` | **ADMIN** | Visibility toggle; `publish` needs at least one problem (`422 CONTEST_NOT_READY`) |
+
 Operational endpoints (root, not `/api`, not reachable through the proxy): `GET /health` (liveness), `GET /ready`
 (PostgreSQL + Redis; `503` with per-dependency `ok`/`unavailable` and no internals), `GET /metrics` (Prometheus, optional
 `METRICS_TOKEN` bearer).
 
-Further endpoints (`/api/contests`, `/api/leaderboard`, `/api/notifications`) arrive with their phases,
-following the paths in the project specification.
+Further endpoints (`/api/leaderboard`, `/api/notifications`) arrive with their phases, following the paths in the
+project specification.
 
 ## Limits
 

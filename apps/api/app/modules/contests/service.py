@@ -150,7 +150,9 @@ async def get_contest_problem(db: AsyncSession, slug: str, label: str) -> Contes
     contest_problem = await _find_contest_problem(db, contest, label)
     problem = await db.get(Problem, contest_problem.problem_id)
     assert problem is not None  # RESTRICT on delete: a contest_problems row always has a live problem
-    return ContestProblemOut(label=contest_problem.label, points=contest_problem.points, problem=problems.to_public(problem))
+    return ContestProblemOut(
+        label=contest_problem.label, points=contest_problem.points, problem=problems.to_public(problem)
+    )
 
 
 async def resolve_contest_submission(
@@ -218,7 +220,9 @@ async def compute_standings(db: AsyncSession, contest: Contest) -> StandingsOut:
         if status != SubmissionStatus.COMPLETED.value or verdict is None:
             continue  # still judging, or the judge itself failed outright (FAILED) — neither is a scored attempt
         by_pair[(user_id, problem_id)].append(
-            _Attempt(accepted=verdict == Verdict.ACCEPTED.value, counts=verdict not in _NOT_AN_ATTEMPT, created_at=created_at)
+            _Attempt(
+                accepted=verdict == Verdict.ACCEPTED.value, counts=verdict not in _NOT_AN_ATTEMPT, created_at=created_at
+            )
         )
 
     # A plain (non-Pydantic) intermediate so the tiebreak key can ride along for sorting without being part of the
@@ -286,7 +290,10 @@ def _admin_out(contest: Contest, titles: dict[uuid.UUID, str]) -> ContestAdminOu
         published=contest.published,
         problems=[
             ContestAdminProblemOut(
-                label=p.label, points=p.points, problem_slug=titles[p.problem_id][0], problem_title=titles[p.problem_id][1]
+                label=p.label,
+                points=p.points,
+                problem_slug=titles[p.problem_id][0],
+                problem_title=titles[p.problem_id][1],
             )
             for p in contest.problems
         ],
@@ -327,7 +334,9 @@ async def _check_slug(db: AsyncSession, slug: str, own_id: uuid.UUID | None) -> 
 async def _resolve_problems(db: AsyncSession, data: ContestAdminInput) -> list[tuple[Problem, str, int]]:
     resolved = []
     for item in data.problems:
-        problem = await db.scalar(select(Problem).where(Problem.slug == item.problem_slug, Problem.archived_at.is_(None)))
+        problem = await db.scalar(
+            select(Problem).where(Problem.slug == item.problem_slug, Problem.archived_at.is_(None))
+        )
         if problem is None:
             raise AppError(422, "PROBLEM_NOT_FOUND", f"No problem with slug '{item.problem_slug}'")
         resolved.append((problem, item.label, item.points))

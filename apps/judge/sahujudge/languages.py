@@ -29,6 +29,14 @@ class LanguageSpec:
     compile_time_ms: int = 20_000
     # Compilers need more memory than the problem's limit. The container is sized max(limit + slack, this).
     min_container_memory_mb: int = 128
+    # See RunLimits.nofile: most compilers/runtimes are fine with the default; some (observed: .NET's MSBuild and,
+    # separately, the CoreCLR runtime) need far more open file descriptors just to start up at all.
+    compile_nofile_limit: int = 128
+    run_nofile_limit: int = 128
+    # RLIMIT_FSIZE for `run` (normally the problem's own output cap, tight by design - a wrong/looping program must
+    # not be able to fill the disk). Some runtimes (observed: CoreCLR, which mmaps its own .dll files) fail to even
+    # start under a cap that small; only such runtimes get a bigger one here. None -> use the output cap as before.
+    run_fsize_bytes: int | None = None
     env: tuple[tuple[str, str], ...] = ()
 
     @property
@@ -96,6 +104,28 @@ LANGUAGES: dict[str, LanguageSpec] = {
             time_multiplier=1.5,
             compile_time_ms=30_000,
             min_container_memory_mb=512,
+            # MSBuild opens far more file descriptors than a typical compiler just to evaluate the project; under the
+            # default 128 it fails confusingly (OOM-killed, "assembly not found") well inside its CPU/wall/memory
+            # budget. 1024 is comfortably above what a `dotnet build` of one file needs and still far below what
+            # would let a fork bomb do real damage.
+            compile_nofile_limit=1024,
+            run_nofile_limit=1024,
+            # CoreCLR mmaps its own shared-framework .dlls (System.Private.CoreLib.dll etc.) when it starts; under the
+            # tight RLIMIT_FSIZE a submission's own output gets (by design - see run_fsize_bytes above), that mmap
+            # fails and the runtime dies before printing anything ("Out Of Memory" / "0x8007000E", despite using well
+            # under a megabyte of actual RSS). 64 MiB is generous headroom for the runtime's own files; a submission's
+            # program output is still capped by --max-output regardless of this.
+            run_fsize_bytes=64 * 1024 * 1024,
+            # Without these, the .NET SDK's first-run/telemetry/update-check machinery tries to phone home; in a
+            # network-denied sandbox that hangs until the wall-clock limit kills it (seen as TIMEOUT with ~0 CPU time
+            # used - the process was blocked on I/O, not compiling).
+            env=(
+                ("DOTNET_CLI_TELEMETRY_OPTOUT", "1"),
+                ("DOTNET_NOLOGO", "1"),
+                ("DOTNET_SKIP_FIRST_TIME_EXPERIENCE", "1"),
+                ("DOTNET_MULTILEVEL_LOOKUP", "0"),
+                ("NUGET_XMLDOC_MODE", "skip"),
+            ),
         ),
         LanguageSpec(
             key="go",

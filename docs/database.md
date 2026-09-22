@@ -157,10 +157,36 @@ Notes:
 * Messages are ordered by `created_at`; indexes: `(user_id, created_at)` on conversations and usage,
   `(conversation_id, created_at)` on messages. Limits per user/conversation are enforced in the service, not the schema.
 
+## Phase 6 schema (migration `0007`)
+
+```
+contests            id, slug (unique), title, description, start_time, end_time (both tz-aware), penalty_minutes,
+                     published, created_by → users (SET NULL), created_at, updated_at
+   └── 1:N contest_problems   id, contest_id → contests (CASCADE), problem_id → problems (RESTRICT), label
+                              ("A".."Z"), points — UNIQUE(contest_id, label), UNIQUE(contest_id, problem_id)
+   └── 1:N contest_participants  contest_id → contests (CASCADE), user_id → users (CASCADE), registered_at
+                                 — PK (contest_id, user_id)
+
+submissions.contest_id   nullable, → contests (SET NULL) — set only by the contest submit/run paths
+```
+
+Notes:
+
+* Chained after `0006_lang` (the judge's added-languages migration from the same build session), not `0006` directly
+  — two migrations were written concurrently; `0007` is the one that landed second and re-chained onto the other.
+* `contest_problems.problem_id` is `RESTRICT`, not `CASCADE`: problems are never hard-deleted (archived instead, like
+  everywhere else in the schema), so this can only ever fire as a defensive check, never in normal operation.
+* `submissions.contest_id` is `SET NULL`, not `CASCADE`: a contest has no delete endpoint at all (draft or
+  published, only publish/unpublish), so this is defensive too — a user's own submission history is never erased by
+  a contest-side action.
+* No `contest_submissions` join table: a submission belongs to at most one contest, so tagging `submissions` directly
+  is simpler. No `leaderboards` snapshot table: standings are cheap enough to compute live on every request from
+  `submissions` (see [contests.md](contests.md#scoring-model)) that freezing a snapshot was not worth adding.
+
 ## Planned tables
 
-Added by the migration of the phase that needs them (names follow the project specification): `contests`, `contest_problems`, `contest_participants`, `contest_submissions`,
-`leaderboards` (6); `discussions`, `discussion_comments`, `discussion_votes`, `notifications` (7).
+Added by the migration of the phase that needs them (names follow the project specification): `discussions`,
+`discussion_comments`, `discussion_votes`, `notifications` (7).
 
 ## Working with migrations
 

@@ -35,6 +35,11 @@ class RunLimits:
     max_output_bytes: int
     max_stderr_bytes: int
     stack_mb: int = 64
+    # Open-file-descriptor cap (RLIMIT_NOFILE). 128 is plenty for a submission's own process and blocks fork-bomb-style
+    # descriptor exhaustion; some compiler toolchains (observed: .NET's MSBuild) open far more than that just to start
+    # up and fail in confusing ways (OOM-killed, "assembly not found") well under their CPU/wall/memory limits. Only
+    # `compile()` ever raises this, via `LanguageSpec.compile_nofile_limit`; user code still runs under 128.
+    nofile: int = 128
 
 
 @dataclass(frozen=True)

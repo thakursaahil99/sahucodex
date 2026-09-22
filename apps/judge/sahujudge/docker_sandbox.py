@@ -224,6 +224,8 @@ class DockerSession:
             str(limits.max_stderr_bytes),
             "--fsize-bytes",
             str(fsize_bytes),
+            "--nofile",
+            str(limits.nofile),
         ]
         for key, value in self._language.env:
             args += ["--env", f"{key}={value}"]
@@ -255,6 +257,7 @@ class DockerSession:
             memory_mb=self._container_memory,
             max_output_bytes=config.compile_output_bytes * 4,
             max_stderr_bytes=config.compile_output_bytes * 4,
+            nofile=self._language.compile_nofile_limit,
         )
         result = await self._run(command, stdin=b"", limits=limits, fsize_bytes=COMPILE_FSIZE_BYTES)
         if result.status is RunStatus.EXITED and result.exit_code == 0:
@@ -267,9 +270,8 @@ class DockerSession:
         return CompileResult(ok=False, output=_clip(text, config.compile_output_bytes))
 
     async def run(self, stdin: str, limits: RunLimits) -> RunResult:
-        return await self._run(
-            self._language.run, stdin=stdin.encode("utf-8"), limits=limits, fsize_bytes=limits.max_output_bytes
-        )
+        fsize_bytes = self._language.run_fsize_bytes or limits.max_output_bytes
+        return await self._run(self._language.run, stdin=stdin.encode("utf-8"), limits=limits, fsize_bytes=fsize_bytes)
 
 
 class DockerSandbox:

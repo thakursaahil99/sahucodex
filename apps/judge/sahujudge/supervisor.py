@@ -188,7 +188,7 @@ def cmd_run(args: argparse.Namespace, command: list[str]) -> int:
         resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds + 1))
         resource.setrlimit(resource.RLIMIT_STACK, (stack_bytes, stack_bytes))
         resource.setrlimit(resource.RLIMIT_FSIZE, (args.fsize_bytes, args.fsize_bytes))
-        resource.setrlimit(resource.RLIMIT_NOFILE, (128, 128))
+        resource.setrlimit(resource.RLIMIT_NOFILE, (args.nofile, args.nofile))
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
     env = {"PATH": DEFAULT_PATH, "HOME": WORKDIR, "LANG": "C.UTF-8", "TMPDIR": "/tmp"}  # noqa: S108
@@ -316,6 +316,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--max-output", type=int, default=1_048_576)
     run.add_argument("--max-stderr", type=int, default=8192)
     run.add_argument("--fsize-bytes", type=int, default=1_048_576)
+    run.add_argument("--nofile", type=int, default=128)
     run.add_argument("--env", action="append", default=[])
     return parser
 

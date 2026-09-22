@@ -30,10 +30,11 @@
                           └────────────────┘        └──────────────────┘
 ```
 
-Build status: **phases 1–5 (foundation, problem platform, SahuJudge, profiles, SahuCodeX AI)** are implemented —
-everything drawn above except Qdrant, MinIO and the metrics stack. The API talks to Ollama over HTTP — a local model, no
-paid service — see [ai.md](ai.md). The judge worker talks to its own, isolated Docker daemon (never the host's
-socket, never the application's) — see [judge.md](judge.md). See the [README](../README.md#roadmap).
+Build status: **phases 1–6 (foundation, problem platform, SahuJudge, profiles, SahuCodeX AI, contests)** are
+implemented — everything drawn above except Qdrant, MinIO and the metrics stack. The API talks to Ollama over HTTP — a
+local model, no paid service — see [ai.md](ai.md). The judge worker talks to its own, isolated Docker daemon (never
+the host's socket, never the application's) — see [judge.md](judge.md). Contests reuse that same judge pipeline
+unchanged — see [contests.md](contests.md). See the [README](../README.md#roadmap).
 
 ## Repository layout
 
@@ -80,10 +81,12 @@ app/
                      judging, and the public GET /users/{username}/stats aggregation
     ai/              SahuCodeX AI: the provider protocol + Ollama client, prompt builders, conversations, usage
                      metering, and the hint/explain/review/chat routes (streaming over Server-Sent Events)
+    contests/        contests, their problems and participants; standings computed live from submissions.contest_id
+                     (never stored); reuses submissions' own create_and_enqueue/run_for — no judge-side changes at all
 ```
 
 Each module owns `models.py` (SQLAlchemy), `schemas.py` (Pydantic, the only shapes that leave the API), `service.py`
-(business logic, no HTTP types) and `router.py` (HTTP glue). Later phases add `contests`, `leaderboard`,
+(business logic, no HTTP types) and `router.py` (HTTP glue). Later phases add `leaderboard`,
 `discussions`, `notifications` and `analytics` the same way — modules are added when they have real behaviour, not
 stubbed early.
 
@@ -121,6 +124,8 @@ request-scoped session closes, so a failed request cannot leave half-written sta
 | **The AI gets problem context by slug, resolved server-side, from the public shape only** | The client never sends statement text, and the server builds the prompt from `ProblemPublic` — the same object the public API returns, which has no field for hidden tests or the editorial. Leaking them would need a bug where `ProblemPublic` is built, not in the AI code. |
 | **AI persistence runs in a cancellation-shielded `finally`** | Pressing Stop or closing the tab cancels the stream generator. The partial reply and the usage row are still written, because an abandoned request costs the model as much as a finished one. |
 | **AI failures are 503s, never placeholder text** | With no model configured, an unreachable server or a timeout, every AI route answers `503 AI_UNAVAILABLE` (or an in-band `error` event mid-stream) and the UI says so. Nothing pretends to be a model reply. |
+| **A contest submission is a `Submission` row with `contest_id` set — not a parallel pipeline** | `submissions/service.py`'s `create_and_enqueue`/`run_for` were split out of the plain submit/run functions specifically so the contest paths (which resolve the problem/language under different rules — contest membership and timing, not `published`) could call the exact same enqueue/event code. The judge worker needed zero changes for contests. |
+| **Contest standings are computed on every request, never stored or WebSocket-pushed** | Deriving them live from `submissions` means there is exactly one place a score can come from — the judge's own verdicts — and no cache to invalidate correctly. The frontend polls (20s while running) instead of a push channel; the design sketch's `contest.started`/`ending`/`finished` WebSocket events were dropped for the same reason — a contest's phase is a pure function of `start_time`/`end_time`, which the client already has, so a `Countdown` component ticking locally and refetching on expiry needed no new server-push mechanism at all. |
 
 ## Frontend
 
@@ -150,5 +155,10 @@ required (forms, dashboard, command palette). State: TanStack Query for server d
   `lib/ai/` (`stream.ts` + `sse.ts` — a `fetch` streaming client with an incremental SSE parser that handles frames split
   anywhere, including mid-UTF-8 character; `use-chat.ts` — the send/stream/stop state machine; `api.ts` — queries). AI
   output goes through the shared `Markdown` component, which now also gives fenced code blocks a Copy button.
+* `components/contests/` (list, overview with phase-gated problem visibility and a live `Countdown`, standings table,
+  and `ContestWorkspace` — `EditorPane`/`ConsolePanel` reused unchanged from the plain workspace, wired to the
+  contest-scoped submit/run endpoints, with `ConsolePanel`'s new `showAi` prop set `false`: no AI tab during a
+  contest) and `lib/contests/`. Admin authoring lives in `components/admin/{admin-contests-table,contest-editor}.tsx`,
+  the same split as problems.
 * Features that ship in later phases appear in navigation as disabled items, never as links to a 404
   (`packages/shared` → `NAV_ITEMS[].available`).

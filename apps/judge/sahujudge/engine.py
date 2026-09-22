@@ -85,7 +85,7 @@ def effective_time_limit_ms(problem_limit_ms: int, language: LanguageSpec) -> in
     return int(problem_limit_ms * language.time_multiplier)
 
 
-def limits_for(time_limit_ms: int, memory_limit_mb: int, config: JudgeConfig) -> RunLimits:
+def limits_for(time_limit_ms: int, memory_limit_mb: int, config: JudgeConfig, language: LanguageSpec) -> RunLimits:
     return RunLimits(
         time_ms=time_limit_ms,
         wall_ms=time_limit_ms * 2 + 1000,
@@ -93,6 +93,7 @@ def limits_for(time_limit_ms: int, memory_limit_mb: int, config: JudgeConfig) ->
         max_output_bytes=config.max_output_bytes,
         max_stderr_bytes=config.max_stderr_bytes,
         stack_mb=config.stack_mb,
+        nofile=language.run_nofile_limit,
     )
 
 
@@ -146,7 +147,7 @@ async def judge_tests(
     ordered = order_tests(tests)
     if len(ordered) > config.max_tests:
         raise ValueError(f"too many tests ({len(ordered)} > {config.max_tests})")
-    limits = limits_for(effective_time_limit_ms(time_limit_ms, language), memory_limit_mb, config)
+    limits = limits_for(effective_time_limit_ms(time_limit_ms, language), memory_limit_mb, config, language)
     report = JudgeReport(verdict=Verdict.ACCEPTED, total=len(ordered))
 
     async with sandbox.session(language, source, memory_limit_mb=memory_limit_mb) as session:
@@ -213,7 +214,7 @@ async def run_custom(
     config: JudgeConfig | None = None,
 ) -> CustomRunReport:
     config = config or JudgeConfig()
-    limits = limits_for(effective_time_limit_ms(time_limit_ms, language), memory_limit_mb, config)
+    limits = limits_for(effective_time_limit_ms(time_limit_ms, language), memory_limit_mb, config, language)
     async with sandbox.session(language, source, memory_limit_mb=memory_limit_mb) as session:
         compiled = await session.compile()
         if not compiled.ok:

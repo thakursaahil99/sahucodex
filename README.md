@@ -6,11 +6,12 @@ An AI-powered coding and competitive-programming platform: an online judge (**Sa
 community, and a local, open-source AI assistant (**SahuCodeX AI**). Everything runs on free/open-source software and
 works locally with **no paid API keys**.
 
-> **Status: build phase 5 of 8 — SahuCodeX AI.** Accounts and sessions (phase 1), 30 original problems in a Monaco
+> **Status: build phase 6 of 8 — Contests.** Accounts and sessions (phase 1), 30 original problems in a Monaco
 > workspace (phase 2), **SahuJudge** grading real code in an isolated sandbox (phase 3), public profiles with streaks
-> and achievements (phase 4), and now **SahuCodeX AI**: hints, code explanations and reviews in the workspace and a
-> streaming chat, all from a *local* open-source model through Ollama — no paid API. Contests are not built yet; see the
-> [roadmap](#roadmap). The UI shows unbuilt features as disabled, never as fake data.
+> and achievements (phase 4), **SahuCodeX AI** hints/reviews/chat from a local Ollama model (phase 5), and now
+> **Contests**: timed, ICPC-style contests with phase-gated problems, registration, and standings computed live from
+> the same SahuJudge verdicts — no separate scoring pipeline, no client-supplied score. Community features are not
+> built yet; see the [roadmap](#roadmap). The UI shows unbuilt features as disabled, never as fake data.
 
 ## What works today
 
@@ -25,11 +26,12 @@ works locally with **no paid API keys**.
 | **SahuJudge** | Run your code against custom input, or Submit to judge it against public *and* hidden tests, in an isolated, non-root, network-less sandbox container — one per execution, destroyed after. Deterministic verdicts (`ACCEPTED`, `WRONG_ANSWER`, `TIME_LIMIT_EXCEEDED`, `MEMORY_LIMIT_EXCEEDED`, `RUNTIME_ERROR`, `COMPILATION_ERROR`, `SYSTEM_ERROR`), live updates over an authenticated WebSocket, submission history and detail pages. Hidden tests never reach the browser |
 | **Profiles** | A public profile per user (`/profile/username`): solved problems by difficulty, submission totals and acceptance rate, a current/longest solving streak, 8 achievements (earned and locked), a 365-day activity calendar. A settings page to edit your bio, country, website, GitHub and avatar URL |
 | **SahuCodeX AI** | **AI Hint** (progressive, never the solution), **AI Review** and **Explain** in the workspace, on their own *"a suggestion, not a verdict"* tab; a streaming **Assistant** chat with saved, renameable conversations and copyable code blocks. Runs on a local Ollama model you choose (`OLLAMA_MODEL`); unconfigured or unreachable, it says so — never a canned reply. The model only ever sees the public statement and your code, never hidden tests. Rate-limited, size-capped, metered. See [docs/ai.md](docs/ai.md) |
+| **Contests** | Timed, ICPC-style contests: problems stay hidden until `start_time`, registration is open until `end_time`, and standings (points, penalty, tiebreak) are computed live from SahuJudge's own verdicts on every request — never stored, never client-supplied. Register-gated Submit/Run reuse the exact same judge pipeline as the plain workspace; AI assistance is switched off for fairness while a contest runs. Admins create, edit (locked once started) and publish contests, including which problems and how many points each is worth. See [docs/contests.md](docs/contests.md) |
 | **Admin problem editor** | Create/edit problems, public and hidden tests, starter code, hints and editorial; readiness check; publish, unpublish, archive, restore. Hidden tests never reach learners |
 | **Dashboard** | Real data from the API: your account, verification state, active sessions, solved/streak/achievement summary |
 | **Navigation** | Desktop + mobile nav, `Ctrl+K` command palette, theme switcher |
 | **Platform** | Redis rate limiting, structured logging with secret redaction, `/health` `/ready` `/metrics`, security headers + CSP, Alembic migrations, seed data, Caddy reverse proxy |
-| **Tests** | 412 API tests (same suite on SQLite and real PostgreSQL; includes brute-force verification of every seed-problem solution) plus 6 opt-in tests against a real Ollama, 127 judge tests on SQLite + fakeredis (39 more need a real Docker daemon — not run in this environment, see [docs/judge.md](docs/judge.md)), 242 web unit/component tests, 61 browser end-to-end tests (the AI ones run against a real local model, unmocked) |
+| **Tests** | 438 API tests (same suite on SQLite and real PostgreSQL; includes brute-force verification of every seed-problem solution) plus 6 opt-in tests against a real Ollama, 138 judge tests on SQLite + fakeredis (39 more need a real Docker daemon — not run in this environment, see [docs/judge.md](docs/judge.md)), 272 web unit/component tests, 66 browser end-to-end tests (the AI ones run against a real local model, unmocked) |
 
 ## Architecture
 
@@ -177,7 +179,7 @@ The e2e suite registers many users from one IP; start the API with relaxed rate 
 
 [architecture](docs/architecture.md) · [problems](docs/problems.md) · [database](docs/database.md) · [api](docs/api.md) ·
 [authentication](docs/authentication.md) · [security](docs/security.md) · [judge](docs/judge.md) (design) ·
-[ai](docs/ai.md) · [contests](docs/contests.md) (design) · [deployment](docs/deployment.md) ·
+[ai](docs/ai.md) · [contests](docs/contests.md) · [deployment](docs/deployment.md) ·
 [troubleshooting](docs/troubleshooting.md)
 
 ## Roadmap
@@ -189,11 +191,26 @@ The e2e suite registers many users from one IP; start the API with relaxed rate 
 | 3 | SahuJudge: submissions, Redis/Celery queue, sandboxes (Python, C++, JS), verdicts, WebSocket updates | **Done** |
 | 4 | Profiles, statistics, streaks, achievements, activity calendar, dashboard stats | **Done** |
 | 5 | SahuCodeX AI: hints, explain, review, debug, chat, streaming, rate limits | **Done** |
-| 6 | Contests: creation, registration, timer, scoring, penalties, live standings | Next |
-| 7 | Community: discussions, voting, reports, notifications, moderation | |
+| 6 | Contests: creation, registration, timer, scoring, penalties, live standings | **Done** |
+| 7 | Community: discussions, voting, reports, notifications, moderation | Next |
 | 8 | RAG, recommendations, caching, analytics, Prometheus/Grafana, performance | |
 
 ### Known limitations / TODO
+
+**Phase 6**
+
+* **No `contest.started`/`ending`/`finished` WebSocket events.** The design sketch called for these; the frontend
+  instead derives a contest's phase client-side from `start_time`/`end_time` (a live `Countdown`, refetching on
+  expiry and polling standings every 20s while running). Simpler, and a contest's phase needs no server push at
+  all since the client already has the timestamps — revisit only if contests need tighter live synchronisation.
+* **No `leaderboards` snapshot table.** Standings are cheap enough to compute live, on every request, from
+  `submissions` that freezing a copy at contest end was not worth adding yet.
+* Penalty rules for `COMPILATION_ERROR`/`SYSTEM_ERROR` (never an attempt, never a penalty) are fixed, not the
+  "per-contest setting" the original design sketch described.
+* **AI assistance is off during a contest** (the workspace hides the SahuCodeX AI tab entirely) for fairness between
+  participants — a deliberate scope addition beyond the original sketch, not a gap.
+* No contest deletion (draft or published) — only publish/unpublish. Matches how problems work (archive, not delete).
+* Full details and what was and wasn't verified: [docs/contests.md](docs/contests.md).
 
 **Phase 5**
 
