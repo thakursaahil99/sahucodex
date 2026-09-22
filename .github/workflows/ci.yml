@@ -43,7 +43,7 @@ jobs:
 
   judge:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 12
     defaults:
       run:
         working-directory: apps/judge
@@ -62,7 +62,10 @@ jobs:
       - run: python -m ruff check .
       - run: python -m ruff format --check .
       - name: pytest (real Docker sandbox tests included)
-        timeout-minutes: 15
+        # Every completed run so far (pass or fail) has taken 40s-130s; 6 minutes is generous headroom without
+        # burning 15+ minutes to discover a genuine hang (seen once: a run stuck at the 15-minute ceiling with no
+        # per-test output at all — this bound makes the next one fail fast and cheaply diagnosable instead).
+        timeout-minutes: 6
         run: |
           # Redirect to a file instead of piping to tee: a test that leaks a child process which inherits the pipe would
           # otherwise keep this step alive forever after pytest itself has finished.
