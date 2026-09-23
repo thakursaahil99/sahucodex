@@ -106,6 +106,14 @@ def test_upgrade_builds_the_model_schema_and_seeds_roles(alembic_config):
         "user_streaks",
         "achievements",
         "user_achievements",
+        "contests",
+        "contest_problems",
+        "contest_participants",
+        "discussions",
+        "discussion_comments",
+        "discussion_votes",
+        "reports",
+        "notifications",
     } <= tables
     assert roles == ["ADMIN", "MODERATOR", "USER"]
     assert languages == ["c", "cpp", "csharp", "go", "java", "javascript", "php", "python", "rust", "typescript"]

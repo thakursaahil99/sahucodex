@@ -36,7 +36,8 @@
       "Bash(*/pg/pgsql/bin/psql.exe *)",
       "Bash(psql *)",
       "Bash(bash */deploy_api.sh*)",
-      "Bash(bash */finish_prod_setup.sh*)"
+      "Bash(bash */finish_prod_setup.sh*)",
+      "Bash(C:/Users/user/AppData/Local/Temp/claude/e--Sahil-Templates-Sahu-Codex/0e241fd8-85c1-4845-826b-8d45897aaa7e/scratchpad/py312/python.exe -m pytest -q -p no:cacheprovider tests/test_community.py)"
     ]
   }
 }

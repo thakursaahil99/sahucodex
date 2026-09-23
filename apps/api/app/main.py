@@ -20,10 +20,12 @@ from app.core.metrics import Metrics
 from app.core.middleware import BodySizeLimitMiddleware, RequestContextMiddleware, SecurityHeadersMiddleware
 from app.core.queue import JobQueue, build_job_queue
 from app.core.rate_limit import RateLimiter, general_rate_limit
+from app.modules.admin.community import router as moderation_router
 from app.modules.admin.router import router as admin_router
 from app.modules.ai.provider import AiProvider, build_ai_provider
 from app.modules.ai.router import router as ai_router
 from app.modules.auth.router import router as auth_router
+from app.modules.community.router import router as community_router
 from app.modules.contests.router import router as contests_router
 from app.modules.health.router import router as health_router
 from app.modules.problems.router import router as problems_router
@@ -115,6 +117,8 @@ def create_app(
     api.include_router(profiles_router)
     api.include_router(submissions_router)
     api.include_router(ai_router)
+    api.include_router(community_router)
+    api.include_router(moderation_router)
     api.include_router(admin_router)
 
     app.include_router(health_router)
