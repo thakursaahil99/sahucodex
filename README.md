@@ -179,8 +179,8 @@ The e2e suite registers many users from one IP; start the API with relaxed rate 
 
 [architecture](docs/architecture.md) · [problems](docs/problems.md) · [database](docs/database.md) · [api](docs/api.md) ·
 [authentication](docs/authentication.md) · [security](docs/security.md) · [judge](docs/judge.md) (design) ·
-[ai](docs/ai.md) · [contests](docs/contests.md) · [deployment](docs/deployment.md) ·
-[troubleshooting](docs/troubleshooting.md)
+[ai](docs/ai.md) · [contests](docs/contests.md) · [web preview](docs/web-preview.md) (design, not in the roadmap) ·
+[deployment](docs/deployment.md) · [troubleshooting](docs/troubleshooting.md)
 
 ## Roadmap
 
