@@ -55,6 +55,14 @@ class DiscussionListItem(BaseModel):
     created_at: datetime
 
 
+class RecentDiscussionItem(DiscussionListItem):
+    """Same shape as DiscussionListItem, plus which problem it's under — for the cross-problem `/discussions`
+    landing page, where (unlike a problem's own tab) that context isn't already on screen."""
+
+    problem_slug: str
+    problem_title: str
+
+
 class CommentOut(BaseModel):
     id: uuid.UUID
     body: str

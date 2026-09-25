@@ -11,6 +11,7 @@ import uuid
 from fastapi import APIRouter, Query, Request, status
 
 from app.core.deps import DbSession, SettingsDep
+from app.core.pagination import Page, PageParamsDep
 from app.core.rate_limit import get_rate_limiter
 from app.modules.auth.deps import CurrentUser, OptionalUser
 from app.modules.community import service as svc
@@ -21,6 +22,7 @@ from app.modules.community.schemas import (
     DiscussionDetail,
     DiscussionListItem,
     NotificationOut,
+    RecentDiscussionItem,
     ReportCreate,
     TargetType,
     UnreadCountOut,
@@ -28,6 +30,14 @@ from app.modules.community.schemas import (
 )
 
 router = APIRouter(tags=["community"])
+
+
+@router.get("/discussions", response_model=Page[RecentDiscussionItem])
+async def list_recent_discussions(db: DbSession, params: PageParamsDep) -> Page[RecentDiscussionItem]:
+    """Cross-problem feed for the `/discussions` landing page. Registered before the parameterized
+    `/discussions/{discussion_id}` route only for readability — FastAPI already matches static path segments
+    before parameterized ones, so the order here doesn't actually affect routing."""
+    return await svc.list_recent_discussions(db, params)
 
 
 @router.get("/problems/{slug}/discussions", response_model=list[DiscussionListItem])

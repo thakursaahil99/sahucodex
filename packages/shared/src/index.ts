@@ -40,6 +40,8 @@ export interface NavItem {
   /** Which build phase delivers it (see README). */
   phase: number;
   adminOnly?: boolean;
+  /** Shown to this role and above (e.g. MODERATOR sees it, so does ADMIN). Ignored if `adminOnly` is set. */
+  minimumRole?: Role;
 }
 
 export const NAV_ITEMS: readonly NavItem[] = [
@@ -48,7 +50,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { label: "Submissions", href: "/submissions", available: true, phase: 3 },
   { label: "Contests", href: "/contests", available: true, phase: 6 },
   { label: "Leaderboard", href: "/leaderboard", available: false, phase: 6 },
-  { label: "Discussions", href: "/discussions", available: false, phase: 7 },
+  { label: "Discussions", href: "/discussions", available: true, phase: 7 },
   { label: "AI Assistant", href: "/ai", available: true, phase: 5 },
+  { label: "Moderation", href: "/moderation", available: true, phase: 7, minimumRole: "MODERATOR" },
   { label: "Admin", href: "/admin", available: true, phase: 2, adminOnly: true },
 ] as const;

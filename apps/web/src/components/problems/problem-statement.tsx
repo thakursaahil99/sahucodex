@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { DiscussionList } from "@/components/community/discussion-list";
 import { DifficultyBadge } from "@/components/problems/difficulty-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,7 @@ export function ProblemStatement({ problem }: { problem: ProblemDetail }) {
             {!problem.solution_unlocked && <Lock className="size-3.5" aria-hidden />}
             Editorial
           </TabsTrigger>
+          <TabsTrigger value="discussion">Discussion</TabsTrigger>
         </TabsList>
 
         <TabsContent value="description" className="mt-5 space-y-6">
@@ -147,6 +149,10 @@ export function ProblemStatement({ problem }: { problem: ProblemDetail }) {
               </p>
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="discussion" className="mt-5">
+          <DiscussionList problemSlug={problem.slug} />
         </TabsContent>
       </Tabs>
     </div>

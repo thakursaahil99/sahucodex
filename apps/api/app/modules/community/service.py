@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import utcnow
 from app.core.errors import AppError, not_found
+from app.core.pagination import Page, PageParams
 from app.modules.community.models import (
     Discussion,
     DiscussionComment,
@@ -33,6 +34,7 @@ from app.modules.community.schemas import (
     DiscussionDetail,
     DiscussionListItem,
     NotificationOut,
+    RecentDiscussionItem,
     ReportOut,
 )
 from app.modules.problems.models import Problem
@@ -85,6 +87,38 @@ async def list_discussions(db: AsyncSession, problem_slug: str) -> list[Discussi
         )
         for d, username in rows
     ]
+
+
+async def list_recent_discussions(db: AsyncSession, params: PageParams) -> Page[RecentDiscussionItem]:
+    """Cross-problem feed for the `/discussions` landing page — a problem's own tab (`list_discussions`) doesn't
+    need the problem's own title/slug on each row since that's already on screen; this does."""
+    # Same visibility rule as find_visible_problem: a discussion under an unpublished/archived problem must not
+    # leak that problem's title/slug (or its existence) into this public cross-problem feed.
+    base = (
+        select(Discussion, User.username, Problem.slug, Problem.title)
+        .outerjoin(User, User.id == Discussion.author_id)
+        .join(Problem, Problem.id == Discussion.problem_id)
+        .where(Problem.published.is_(True), Problem.archived_at.is_(None))
+    )
+
+    total = await db.scalar(select(func.count()).select_from(base.subquery()))
+    rows = (
+        await db.execute(base.order_by(Discussion.created_at.desc()).offset(params.offset).limit(params.limit))
+    ).all()
+    items = [
+        RecentDiscussionItem(
+            id=d.id,
+            title=d.title,
+            author=_author_out(d.author_id, username),
+            vote_score=d.vote_score,
+            comment_count=d.comment_count,
+            created_at=d.created_at,
+            problem_slug=problem_slug,
+            problem_title=problem_title,
+        )
+        for d, username, problem_slug, problem_title in rows
+    ]
+    return Page.build(items, total or 0, params)
 
 
 async def create_discussion(

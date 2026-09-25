@@ -295,6 +295,70 @@ async def test_body_and_title_length_limits_are_enforced(app) -> None:
         assert r.status_code == 422
 
 
+async def test_recent_discussions_feed_spans_problems_newest_first(app) -> None:
+    await insert_problem(app, "two-sum")
+    await insert_problem(app, "three-sum")
+    async with signed_in(app, username="alice") as (client, headers):
+        first = await _new_discussion(app, client, headers, "two-sum")
+        second = await _new_discussion(app, client, headers, "three-sum")
+
+        r = await client.get("/api/discussions")
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["total"] == 2 and len(body["items"]) == 2
+        # Newest first.
+        assert [item["id"] for item in body["items"]] == [second, first]
+        assert body["items"][0]["problem_slug"] == "three-sum"
+        assert body["items"][0]["problem_title"] and body["items"][1]["problem_slug"] == "two-sum"
+
+
+async def test_recent_discussions_feed_excludes_unpublished_problems(app) -> None:
+    import uuid as _uuid
+
+    from app.modules.community.models import Discussion
+    from app.modules.problems.models import Problem
+
+    await insert_problem(app, "two-sum")
+    await insert_problem(app, "hidden-one", published=False)
+
+    async with signed_in(app, username="alice") as (client, headers):
+        await _new_discussion(app, client, headers, "two-sum")
+
+        # Discussions can only be created under visible problems via the public endpoint (which 404s on a
+        # hidden problem), so seed one directly to prove the feed's join-filter excludes it too, not just the
+        # create-time check.
+        async with app.state.sessionmaker() as db:
+            hidden = (await db.execute(Problem.__table__.select().where(Problem.slug == "hidden-one"))).first()
+            db.add(
+                Discussion(
+                    id=_uuid.uuid4(),
+                    problem_id=hidden.id,
+                    author_id=None,
+                    title="Should not appear",
+                    body="x",
+                )
+            )
+            await db.commit()
+
+        r = await client.get("/api/discussions")
+        assert r.status_code == 200
+        assert all(item["problem_slug"] != "hidden-one" for item in r.json()["items"])
+
+
+async def test_recent_discussions_feed_is_paginated(app) -> None:
+    await insert_problem(app, "two-sum")
+    async with signed_in(app, username="alice") as (client, headers):
+        for _ in range(3):
+            await _new_discussion(app, client, headers, "two-sum")
+
+        r = await client.get("/api/discussions?page=1&limit=2")
+        body = r.json()
+        assert body["total"] == 3 and len(body["items"]) == 2 and body["pages"] == 2
+
+        r2 = await client.get("/api/discussions?page=2&limit=2")
+        assert len(r2.json()["items"]) == 1
+
+
 async def test_reporting_requires_auth(app) -> None:
     await insert_problem(app, "two-sum")
     async with signed_in(app, username="alice") as (alice, alice_headers):

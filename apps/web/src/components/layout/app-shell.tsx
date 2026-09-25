@@ -8,6 +8,7 @@ import { useState, type ReactNode } from "react";
 import { hasRole, NAV_ITEMS, type NavItem } from "@sahucodex/shared";
 
 import { Logo } from "@/components/brand/logo";
+import { NotificationBell } from "@/components/community/notification-bell";
 import { CommandPalette, useCommandPalette } from "@/components/layout/command-palette";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -32,9 +33,10 @@ function useNavItems(): NavItem[] {
     available: Boolean(user),
     phase: 4,
   };
-  const regular = NAV_ITEMS.filter((item) => !item.adminOnly);
+  const regular = NAV_ITEMS.filter((item) => !item.adminOnly && !item.minimumRole);
+  const roleGated = NAV_ITEMS.filter((item) => item.minimumRole && hasRole(user?.roles, item.minimumRole));
   const admin = NAV_ITEMS.filter((item) => item.adminOnly && isAdmin);
-  return [...regular, profile, ...admin];
+  return [...regular, profile, ...roleGated, ...admin];
 }
 
 function NavLink({
@@ -172,6 +174,7 @@ export function AppShell({ children, bleed = false }: { children: ReactNode; ble
             >
               <Search aria-hidden />
             </Button>
+            <NotificationBell />
             <ThemeToggle />
             <UserMenu />
           </div>
