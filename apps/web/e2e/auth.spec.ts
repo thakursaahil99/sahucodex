@@ -222,14 +222,13 @@ test.describe("navigation and command palette", () => {
     await register(page);
     const nav = page.getByRole("navigation", { name: "Primary" });
     await expect(nav.getByRole("link", { name: "Dashboard" })).toHaveAttribute("aria-current", "page");
-    for (const label of ["Leaderboard", "Discussions"]) {
-      await expect(nav.getByText(label, { exact: false }).first()).toHaveAttribute("aria-disabled", "true");
-    }
+    await expect(nav.getByText("Leaderboard", { exact: false }).first()).toHaveAttribute("aria-disabled", "true");
     await expect(nav.getByRole("link", { name: "Problems" })).toHaveAttribute("href", "/problems"); // shipped in phase 2
     await expect(nav.getByRole("link", { name: "Submissions" })).toHaveAttribute("href", "/submissions"); // phase 3
     await expect(nav.getByRole("link", { name: "Profile" })).toHaveAttribute("href", /^\/profile\//); // phase 4
     await expect(nav.getByRole("link", { name: "AI Assistant" })).toHaveAttribute("href", "/ai"); // phase 5
     await expect(nav.getByRole("link", { name: "Contests" })).toHaveAttribute("href", "/contests"); // phase 6
+    await expect(nav.getByRole("link", { name: "Discussions" })).toHaveAttribute("href", "/discussions"); // phase 7
     // A regular user never sees the Admin entry.
     await expect(nav.getByText("Admin")).toHaveCount(0);
   });
