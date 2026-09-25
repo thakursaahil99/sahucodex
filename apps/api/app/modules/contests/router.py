@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Request, status
 
-from app.core.deps import DbSession, RedisDep, SettingsDep
+from app.core.deps import CacheDep, DbSession, RedisDep, SettingsDep
 from app.core.queue import JobQueue
 from app.core.rate_limit import get_rate_limiter
 from app.modules.auth.deps import CurrentUser, OptionalUser
@@ -93,6 +93,6 @@ async def run_contest_problem(
 
 
 @router.get("/{slug}/standings", response_model=StandingsOut)
-async def get_standings(slug: str, db: DbSession) -> StandingsOut:
+async def get_standings(slug: str, db: DbSession, cache: CacheDep) -> StandingsOut:
     contest = await svc.get_contest(db, slug)
-    return await svc.compute_standings(db, contest)
+    return await svc.compute_standings(db, contest, cache)

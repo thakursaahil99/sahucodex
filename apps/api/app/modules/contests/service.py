@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.cache import Cache
 from app.core.db import utcnow
 from app.core.errors import AppError, conflict, not_found
 from app.modules.contests.models import Contest, ContestParticipant, ContestProblem
@@ -192,7 +193,27 @@ class _Attempt:
     created_at: datetime
 
 
-async def compute_standings(db: AsyncSession, contest: Contest) -> StandingsOut:
+# Standings are still computed fresh from `submissions` every time (see the module docstring) — this only caches
+# the *result* briefly. Short enough to stay well under the frontend's 20s standings poll, so a viewer never waits
+# on a stale value for long, but long enough to absorb a burst of concurrent viewers hitting the same contest.
+_STANDINGS_CACHE_TTL_SECONDS = 5
+
+
+async def compute_standings(db: AsyncSession, contest: Contest, cache: Cache | None = None) -> StandingsOut:
+    cache_key = f"standings:{contest.id}"
+    if cache is not None:
+        cached = await cache.get_json(cache_key)
+        if cached is not None:
+            return StandingsOut.model_validate(cached)
+
+    result = await _compute_standings_uncached(db, contest)
+
+    if cache is not None:
+        await cache.set_json(cache_key, result.model_dump(mode="json"), _STANDINGS_CACHE_TTL_SECONDS)
+    return result
+
+
+async def _compute_standings_uncached(db: AsyncSession, contest: Contest) -> StandingsOut:
     participants = (
         await db.execute(
             select(ContestParticipant.user_id, User.username)

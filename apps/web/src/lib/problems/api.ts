@@ -2,7 +2,7 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
-import { apiPublic } from "@/lib/api/client";
+import { api, apiPublic } from "@/lib/api/client";
 import { useAuthStore } from "@/lib/auth/store";
 import { filtersToApiQuery, type ProblemFilters } from "@/lib/problems/filters";
 import type { Hint, Language, Page, ProblemDetail, ProblemListItem, TagWithCount } from "@/lib/problems/types";
@@ -47,4 +47,14 @@ export function useLanguages() {
 
 export function fetchHint(slug: string, index: number): Promise<Hint> {
   return apiPublic<Hint>(`/problems/${encodeURIComponent(slug)}/hints/${index}`);
+}
+
+/** Personalised "what to solve next" — needs sign-in, so the caller must guard on `authenticated` first. */
+export function useRecommendations(enabled: boolean) {
+  return useQuery({
+    queryKey: ["recommendations"],
+    queryFn: () => api<ProblemListItem[]>("/recommendations"),
+    enabled,
+    staleTime: 60_000,
+  });
 }

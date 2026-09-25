@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 
 import { describeAuthError } from "@/components/auth/errors";
+import { RecommendedProblems } from "@/components/dashboard/recommended-problems";
 import { SolvedBreakdown } from "@/components/profiles/solved-breakdown";
 import { StreakCard } from "@/components/profiles/streak-card";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +24,7 @@ import { useProfileStats } from "@/lib/profiles/api";
 import { formatDate } from "@/lib/utils";
 
 const UPCOMING = [
-  { phase: 7, title: "Community", body: "Discussions, voting, reports and moderation." },
+  { phase: 8, title: "Advanced", body: "RAG, recommendations, caching, analytics, Prometheus/Grafana, performance." },
 ] as const;
 
 export function DashboardView() {
@@ -77,6 +78,7 @@ export function DashboardView() {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <GettingStarted emailVerified={user.email_verified} solved={stats.data?.solved.total ?? 0} />
+          <RecommendedProblems enabled={Boolean(user)} />
           <SessionsCard />
         </div>
         <div className="space-y-6">

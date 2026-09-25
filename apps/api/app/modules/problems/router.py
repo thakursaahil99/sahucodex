@@ -9,7 +9,7 @@ from fastapi import APIRouter, Query
 from app.core.deps import CacheDep, DbSession
 from app.core.errors import not_found, unauthorized
 from app.core.pagination import Page, PageParamsDep
-from app.modules.auth.deps import OptionalUser
+from app.modules.auth.deps import CurrentUser, OptionalUser
 from app.modules.problems import service
 from app.modules.problems.models import Difficulty, Problem
 from app.modules.problems.schemas import (
@@ -87,6 +87,14 @@ async def get_hint(slug: str, index: int, db: DbSession) -> HintOut:
     if not 1 <= index <= len(hints):
         raise not_found("HINT_NOT_FOUND", "That hint does not exist")
     return HintOut(index=index, total=len(hints), hint=hints[index - 1])
+
+
+@router.get("/recommendations", response_model=list[ProblemListItem])
+async def get_recommendations(db: DbSession, user: CurrentUser) -> list[ProblemListItem]:
+    """Personalised "what to solve next", from the caller's own solved-tag history and difficulty progression —
+    see `service.recommend_problems` for the ranking. Signed-in only: there is no meaningful recommendation for an
+    anonymous caller with no history."""
+    return await service.recommend_problems(db, user)
 
 
 @router.get("/tags", response_model=list[TagWithCount])

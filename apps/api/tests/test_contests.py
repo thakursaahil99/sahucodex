@@ -348,6 +348,38 @@ async def test_registered_participants_with_no_submissions_still_appear(build_ap
     ]
 
 
+async def test_standings_are_cached_briefly(build_app) -> None:
+    """A second request within the TTL must not re-derive standings from `submissions` — it should see the exact
+    same (now stale) result, proving `compute_standings` actually consulted the cache rather than recomputing."""
+    app = await build_app()
+    await insert_problem(app, "a-prob", published=False)
+    start = utcnow() - timedelta(minutes=1)
+    contest_id = await seed_contest(app, start=start, problems=(("a-prob", "A", 100),))
+    await create_user(app)  # "ada" (the default)
+    ada = await user_id_of(app, "ada")
+    await register_user(app, contest_id, ada)
+
+    async with make_client(app) as client:
+        first = await client.get("/api/contests/spring-cup/standings")
+        assert first.json()["rows"][0]["total_points"] == 0
+
+        # A new ACCEPTED submission would change the standings if recomputed...
+        await seed_submission(
+            app, contest_id=contest_id, user_id=ada, problem_slug="a-prob",
+            verdict=Verdict.ACCEPTED.value, created_at=utcnow(),
+        )  # fmt: skip
+
+        # ...but the cached response is served instead, so the score is still stale (proves the cache hit).
+        second = await client.get("/api/contests/spring-cup/standings")
+        assert second.json()["rows"][0]["total_points"] == 0
+
+        redis = app.state.redis
+        await redis.delete(f"cache:standings:{contest_id}")
+
+        third = await client.get("/api/contests/spring-cup/standings")
+        assert third.json()["rows"][0]["total_points"] == 100
+
+
 # --- admin --------------------------------------------------------------------------------------------------------
 
 

@@ -9,7 +9,7 @@ import type { ProfileStats } from "@/lib/profiles/types";
 import { sampleUser } from "@/test-utils";
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock("@/lib/api/client", () => ({ api: vi.fn().mockResolvedValue({}) }));
+vi.mock("@/lib/api/client", () => ({ api: vi.fn().mockResolvedValue([]) }));
 
 const useMe = vi.fn((): { data: User | undefined } => ({ data: sampleUser }));
 const useSessions = vi.fn(() => ({ data: [], isPending: false, isError: false, refetch: vi.fn() }));
@@ -110,6 +110,11 @@ describe("DashboardView", () => {
   it("no longer lists Contests as upcoming, now that phase 6 has shipped", () => {
     renderDashboard();
     expect(screen.queryByText("Timed contests with penalties and a live leaderboard.")).not.toBeInTheDocument();
-    expect(screen.getByText("Community")).toBeInTheDocument(); // what is genuinely still to come
+  });
+
+  it("no longer lists Community as upcoming, now that phase 7 has shipped", () => {
+    renderDashboard();
+    expect(screen.queryByText("Discussions, voting, reports and moderation.")).not.toBeInTheDocument();
+    expect(screen.getByText("Advanced")).toBeInTheDocument(); // what is genuinely still to come
   });
 });
