@@ -1,6 +1,6 @@
 "use client";
 
-import { FilePlus2, FileText, Archive, CheckCircle2 } from "lucide-react";
+import { BarChart3, FilePlus2, FileText, Archive, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -36,13 +36,38 @@ export function AdminOverview() {
         ))}
       </div>
 
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Link href="/admin/analytics" className="group">
+          <Card className="h-full transition-colors group-hover:border-brand-blue/50">
+            <CardHeader className="flex-row items-center gap-3 space-y-0">
+              <BarChart3 className="size-5 text-brand-cyan" aria-hidden />
+              <div>
+                <CardTitle>Analytics</CardTitle>
+                <CardDescription>Platform totals and SahuCodeX AI usage.</CardDescription>
+              </div>
+            </CardHeader>
+          </Card>
+        </Link>
+        <Link href="/admin/contests" className="group">
+          <Card className="h-full transition-colors group-hover:border-brand-blue/50">
+            <CardHeader className="flex-row items-center gap-3 space-y-0">
+              <FileText className="size-5 text-brand-cyan" aria-hidden />
+              <div>
+                <CardTitle>Contests</CardTitle>
+                <CardDescription>Create and manage contests.</CardDescription>
+              </div>
+            </CardHeader>
+          </Card>
+        </Link>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Coming with later phases</CardTitle>
           <CardDescription>These sections need features that are not built yet.</CardDescription>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          User management, submissions, discussion moderation, analytics, audit logs and system health.
+          User management, per-submission drill-down, audit logs and system health.
         </CardContent>
       </Card>
     </div>

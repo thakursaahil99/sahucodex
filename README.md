@@ -28,19 +28,25 @@ works locally with **no paid API keys**.
 | **SahuJudge** | Run your code against custom input, or Submit to judge it against public *and* hidden tests, in an isolated, non-root, network-less sandbox container — one per execution, destroyed after. Deterministic verdicts (`ACCEPTED`, `WRONG_ANSWER`, `TIME_LIMIT_EXCEEDED`, `MEMORY_LIMIT_EXCEEDED`, `RUNTIME_ERROR`, `COMPILATION_ERROR`, `SYSTEM_ERROR`), live updates over an authenticated WebSocket, submission history and detail pages. Hidden tests never reach the browser |
 | **Profiles** | A public profile per user (`/profile/username`): solved problems by difficulty, submission totals and acceptance rate, a current/longest solving streak, 8 achievements (earned and locked), a 365-day activity calendar. A settings page to edit your bio, country, website, GitHub and avatar URL |
 | **SahuCodeX AI** | **AI Hint** (progressive, never the solution), **AI Review** and **Explain** in the workspace, on their own *"a suggestion, not a verdict"* tab; a streaming **Assistant** chat with saved, renameable conversations and copyable code blocks. Runs on a local Ollama model you choose (`OLLAMA_MODEL`); unconfigured or unreachable, it says so — never a canned reply. The model only ever sees the public statement and your code, never hidden tests. Rate-limited, size-capped, metered. See [docs/ai.md](docs/ai.md) |
-| **Contests** | Timed, ICPC-style contests: problems stay hidden until `start_time`, registration is open until `end_time`, and standings (points, penalty, tiebreak) are computed live from SahuJudge's own verdicts on every request — never stored, never client-supplied. Register-gated Submit/Run reuse the exact same judge pipeline as the plain workspace; AI assistance is switched off for fairness while a contest runs. Admins create, edit (locked once started) and publish contests, including which problems and how many points each is worth. See [docs/contests.md](docs/contests.md) |
-| **Admin problem editor** | Create/edit problems, public and hidden tests, starter code, hints and editorial; readiness check; publish, unpublish, archive, restore. Hidden tests never reach learners |
-| **Dashboard** | Real data from the API: your account, verification state, active sessions, solved/streak/achievement summary |
+| **Contests** | Timed, ICPC-style contests: problems stay hidden until `start_time`, registration is open until `end_time`, and standings (points, penalty, tiebreak) are computed live from SahuJudge's own verdicts on every request, briefly cached to absorb concurrent viewers — never stored otherwise, never client-supplied. Register-gated Submit/Run reuse the exact same judge pipeline as the plain workspace; AI assistance is switched off for fairness while a contest runs. Admins create, edit (locked once started) and publish contests, including which problems and how many points each is worth. See [docs/contests.md](docs/contests.md) |
+| **Community** | Per-problem discussion threads and replies, up/down voting, reporting, in-app notifications, and a MODERATOR-gated moderation queue (remove content via a report, or lock a thread directly) |
+| **Recommendations** | A personalised "what to solve next" on the dashboard, ranked from your own solved-tag history and difficulty progression — purely content-based, no other user's data is ever read |
+| **RAG** | Semantic "similar problems" on the problem detail page, a `/search/semantic` endpoint, and retrieval-augmented context in SahuCodeX AI chat — all on [Qdrant](https://qdrant.tech) + Ollama embeddings, optional exactly like AI itself. See [docs/rag.md](docs/rag.md) |
+| **Admin** | Problem editor (create/edit, public and hidden tests, starter code, hints, editorial, readiness check, publish/unpublish/archive/restore — hidden tests never reach learners), contest authoring, and live analytics (platform totals, 30-day AI usage) |
+| **Dashboard** | Real data from the API: your account, verification state, active sessions, solved/streak/achievement summary, recommended problems |
 | **Navigation** | Desktop + mobile nav, `Ctrl+K` command palette, theme switcher |
-| **Platform** | Redis rate limiting, structured logging with secret redaction, `/health` `/ready` `/metrics`, security headers + CSP, Alembic migrations, seed data, Caddy reverse proxy |
-| **Tests** | 438 API tests (same suite on SQLite and real PostgreSQL; includes brute-force verification of every seed-problem solution) plus 6 opt-in tests against a real Ollama, 138 judge tests on SQLite + fakeredis (39 more need a real Docker daemon — not run in this environment, see [docs/judge.md](docs/judge.md)), 272 web unit/component tests, 66 browser end-to-end tests (the AI ones run against a real local model, unmocked) |
+| **Platform** | Redis rate limiting and read-through caching, structured logging with secret redaction, `/health` `/ready` `/metrics` (Prometheus), optional Grafana dashboard, security headers + CSP, Alembic migrations, seed data, Caddy reverse proxy |
+| **Tests** | 484 API tests (same suite on SQLite and real PostgreSQL; includes brute-force verification of every seed-problem solution) plus 6 opt-in tests against a real Ollama, 138 judge tests on SQLite + fakeredis (39 more need a real Docker daemon — not run in this environment, see [docs/judge.md](docs/judge.md)), 287 web unit/component tests, 66 browser end-to-end tests (the AI ones run against a real local model, unmocked) |
 
 ## Architecture
 
 ```
  browser ─► Caddy ─┬─ /api/*  ─► FastAPI ─┬─► PostgreSQL
-                   └─ others  ─► Next.js  └─► Redis  ──► Celery judge worker ─► dedicated sandbox daemon
-                                                └──────────────► Ollama (local model, optional)
+                   └─ others  ─► Next.js  ├─► Redis  ──► Celery judge worker ─► dedicated sandbox daemon
+                                          ├─► Ollama (local model, optional — chat + embeddings)
+                                          └─► Qdrant (vector search, optional)
+
+              Prometheus (optional) ── scrapes GET /metrics ──► Grafana (optional)
 ```
 
 Details and the reasoning behind each choice: [docs/architecture.md](docs/architecture.md).
@@ -49,7 +55,9 @@ Details and the reasoning behind each choice: [docs/architecture.md](docs/archit
 
 Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · shadcn/ui-style components on Radix · TanStack Query · Zustand ·
 FastAPI · Pydantic · SQLAlchemy 2 (async) · Alembic · PostgreSQL 16 · Redis · Celery · Caddy · Docker Compose ·
-Monaco Editor · pytest · Vitest · Playwright. Planned: Recharts, Ollama, Qdrant/Chroma, MinIO, Prometheus, Grafana.
+Monaco Editor · Ollama · Qdrant · Prometheus · Grafana · pytest · Vitest · Playwright. Not built: MinIO/object storage
+(see [docs/architecture.md](docs/architecture.md)'s notes on avatar URLs), Recharts (the admin analytics UI uses
+plain tables, not charts, at its current scale).
 
 ## Requirements
 
@@ -215,8 +223,12 @@ The e2e suite registers many users from one IP; start the API with relaxed rate 
 * **The `docker-compose.yml` `qdrant` service was never booted** (no Docker in the environment this was built in,
   same as `sandbox`/`judge`/`ollama` before it) — parses as valid YAML; verified instead with an in-process
   `qdrant-client` in the test suite. Prometheus/Grafana configs under `infrastructure/` are similarly unbooted.
-* Analytics is `AiUsage` rows being recorded (since phase 5) plus the metrics already exposed at `GET /metrics`
-  (Prometheus format) — there is no separate analytics dashboard UI in this phase.
+* **Analytics** (`GET /api/admin/analytics`, `/admin/analytics` in the UI): platform totals (users, published
+  problems, submissions, published contests, discussions) plus a 30-day summary of `AiUsage` — the rows recorded
+  since phase 5 that nothing read until now (requests/failures/avg duration per AI feature). Everything is a live
+  aggregate query, computed on every request, never stored or pre-aggregated — there is no separate metrics
+  warehouse. Infrastructure-level metrics (request rate, latency, memory) are the existing Prometheus `/metrics`
+  endpoint plus the Grafana dashboard below, a different layer from this admin-facing usage summary.
 * Full details on RAG specifically: [docs/rag.md](docs/rag.md).
 
 **Phase 6**
@@ -286,8 +298,8 @@ The e2e suite registers many users from one IP; start the API with relaxed rate 
 **Phase 2**
 
 * *Format* only tidies whitespace for Python and C++ (no formatter is bundled); JavaScript uses Monaco's formatter.
-* Admin covers problems and tags only. User management, contests, discussions, analytics, audit-log and health pages
-  arrive with their features.
+* Admin now covers problems, tags, contests, discussion moderation (a separate `/moderation` area, MODERATOR-gated
+  rather than ADMIN-only) and analytics. Still missing: user management, and audit-log/system-health pages.
 * Monaco is ~24 MB of static files copied at build time; trimming unused languages would shrink the image.
 
 **Phase 1**

@@ -55,3 +55,42 @@ export const validateProblem = (id: string) =>
   api<{ ok: boolean; issues: ValidationIssue[] }>(`/admin/problems/${id}/validation`);
 
 export const createTag = (name: string) => api<Tag>("/admin/tags", { method: "POST", body: { name } });
+
+// --- analytics (phase 8) -------------------------------------------------------------------------------------
+
+export interface PlatformTotals {
+  users: number;
+  published_problems: number;
+  submissions: number;
+  submissions_last_30d: number;
+  published_contests: number;
+  discussions: number;
+}
+
+export interface AiFeatureUsage {
+  feature: string;
+  requests: number;
+  failed: number;
+  avg_duration_ms: number;
+  avg_response_chars: number;
+}
+
+export interface AiUsageSummary {
+  window_days: number;
+  total_requests: number;
+  failed_requests: number;
+  by_feature: AiFeatureUsage[];
+}
+
+export interface Analytics {
+  platform: PlatformTotals;
+  ai_usage: AiUsageSummary;
+}
+
+export function useAnalytics() {
+  return useQuery({
+    queryKey: ["admin", "analytics"],
+    queryFn: () => api<Analytics>("/admin/analytics"),
+    staleTime: 30_000,
+  });
+}

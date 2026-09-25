@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.core.deps import DbSession
 from app.core.pagination import Page, PageParamsDep
+from app.modules.admin.analytics import router as analytics_admin_router
 from app.modules.admin.contests import router as contests_admin_router
 from app.modules.admin.problems import router as problems_admin_router
 from app.modules.auth.deps import require_role
@@ -30,3 +31,4 @@ async def list_users(
 
 router.include_router(problems_admin_router)
 router.include_router(contests_admin_router)
+router.include_router(analytics_admin_router)
