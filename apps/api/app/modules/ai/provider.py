@@ -42,6 +42,14 @@ class AiProvider(Protocol):
     ) -> AsyncIterator[str]: ...
 
 
+class EmbeddingProvider(Protocol):
+    """A separate, narrower protocol from `AiProvider`: embeddings are only ever needed by RAG (app.modules.rag),
+    and only Ollama backs them today (see Settings.ollama_embed_model) — OpenRouter deployments simply have
+    `rag_configured` stay False rather than this protocol growing an unimplemented method there."""
+
+    async def embed(self, *, model: str, text: str, timeout_s: float) -> list[float]: ...
+
+
 class OllamaProvider:
     """Talks to a real, local Ollama server over its HTTP API. No response is ever invented — an unreachable server,
     a missing model, or a timeout always raises `AiUnavailableError` rather than returning placeholder text."""
@@ -104,6 +112,19 @@ class OllamaProvider:
                 return response.status_code == 200
         except httpx.HTTPError:
             return False
+
+    async def embed(self, *, model: str, text: str, timeout_s: float) -> list[float]:
+        try:
+            async with httpx.AsyncClient(timeout=timeout_s) as client:
+                response = await client.post(f"{self.base_url}/api/embeddings", json={"model": model, "prompt": text})
+                response.raise_for_status()
+                data = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            raise AiUnavailableError(f"Ollama embed failed: {type(exc).__name__}") from exc
+        embedding = data.get("embedding")
+        if not isinstance(embedding, list) or not embedding:
+            raise AiUnavailableError("Ollama returned an empty embedding")
+        return embedding
 
 
 class OpenRouterProvider:

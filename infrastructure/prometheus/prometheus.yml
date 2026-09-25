@@ -1,0 +1,16 @@
+# Scrape config for the SahuCodeX API's own /metrics endpoint (apps/api/app/modules/health/router.py).
+# Not booted in the environment this was built in (no Docker here) — see docker-compose.yml's `prometheus` service
+# and docs/architecture.md. Start with: docker compose --profile observability up -d prometheus grafana
+
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: sahucodex-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["backend:8000"]
+    # If METRICS_TOKEN is set in .env, uncomment and fill in the same value — Prometheus sends it as a bearer
+    # token, matching the hmac.compare_digest check in apps/api/app/modules/health/router.py.
+    # authorization:
+    #   credentials: "<METRICS_TOKEN value>"

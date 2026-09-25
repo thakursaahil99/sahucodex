@@ -79,10 +79,26 @@ def review_prompt(problem: ProblemPublic | None, language: str, code: str) -> tu
     return system, prompt + "\n\nReview this code."
 
 
-def chat_system_prompt(problem: ProblemPublic | None) -> str:
+def _rag_block(related: list[tuple[str, str, str]]) -> str:
+    """`related` is (slug, title, difficulty) triples from a RAG similarity search — see app.modules.rag.service.
+    Given only as reference material the model may mention; it is never told these are the "right" answer to
+    anything, since a semantic match is not the same as "the ideal problem for this learner"."""
+    if not related:
+        return ""
+    lines = "\n".join(f"- {title} ({difficulty}), slug: {slug}" for slug, title, difficulty in related)
+    return (
+        "Problems on this platform that may be relevant to what the learner is asking about (only mention one if "
+        "it genuinely helps; never invent a problem or slug that is not in this list):\n" + lines
+    )
+
+
+def chat_system_prompt(problem: ProblemPublic | None, related: list[tuple[str, str, str]] | None = None) -> str:
     system = RULES + (
         "\nYou are having an open-ended conversation with a learner. "
         "Ask a clarifying question if the request is ambiguous."
     )
     block = _problem_block(problem)
-    return f"{system}\n\n{block}" if block else system
+    if block:
+        return f"{system}\n\n{block}"
+    rag_block = _rag_block(related or [])
+    return f"{system}\n\n{rag_block}" if rag_block else system

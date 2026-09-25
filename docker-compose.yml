@@ -10,7 +10,7 @@
 # tooling; remove those port mappings on a shared host.
 # SahuJudge (phase 3): `judge` is the Celery worker; `sandbox` is a DEDICATED Docker daemon (rootless Docker-in-Docker)
 # that runs submitted code in isolated containers. Read docs/judge.md before exposing this to strangers.
-# Phase 8 adds Prometheus, Grafana and Qdrant (docs/architecture.md).
+# Phase 8 adds RAG (Qdrant, below; docker compose --profile rag up) and Prometheus/Grafana (docs/architecture.md).
 
 name: sahucodex
 
@@ -169,6 +169,56 @@ services:
       timeout: 5s
       retries: 10
 
+  # Vector search for RAG (build phase 8: semantic problem search, "similar problems", retrieval-augmented chat
+  # context). Start with:  docker compose --profile rag up   and set QDRANT_URL=http://qdrant:6333 in .env.
+  # Embeddings still come from Ollama (--profile ai) — this service only stores and searches the resulting vectors.
+  # NOT BOOTED HERE (no Docker in the environment this was built in): config parses; verified instead against an
+  # in-process `qdrant-client` (`location=":memory:"`) in the test suite — see apps/api/tests/test_rag.py.
+  qdrant:
+    profiles: ["rag"]
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    volumes:
+      - qdrant-data:/qdrant/storage
+    ports:
+      - "127.0.0.1:6333:6333"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Metrics (build phase 8). The API already exposes GET /metrics unconditionally (apps/api/app/modules/health/
+  # router.py); these two services are purely observers of it. Start with:  docker compose --profile observability up
+  # NOT BOOTED HERE (no Docker in the environment this was built in): config parses; the underlying metrics
+  # (Counter/Histogram + ProcessCollector, apps/api/app/core/metrics.py) are covered by apps/api/tests/test_platform.py.
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      backend: { condition: service_healthy }
+
+  grafana:
+    profiles: ["observability"]
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      - prometheus
+
 networks:
   # judge <-> sandbox daemon only. `internal` means nothing on it can reach the internet or the host.
   sandbox-control:
@@ -183,3 +233,6 @@ volumes:
   caddy-data:
   caddy-config:
   ollama-data:
+  qdrant-data:
+  prometheus-data:
+  grafana-data:

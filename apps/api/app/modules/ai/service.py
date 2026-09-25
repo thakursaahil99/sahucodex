@@ -10,6 +10,7 @@ import uuid
 from collections.abc import AsyncIterator
 
 import anyio
+from qdrant_client import AsyncQdrantClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -18,10 +19,13 @@ from app.core.config import Settings
 from app.core.errors import AppError, not_found
 from app.modules.ai import prompts
 from app.modules.ai.models import AiConversation, AiFeature, AiMessage, AiRole, AiUsage
-from app.modules.ai.provider import AiProvider, AiUnavailableError
+from app.modules.ai.provider import AiProvider, AiUnavailableError, EmbeddingProvider
 from app.modules.ai.schemas import CodeRequest, ConversationCreate, ConversationRename, HintRequest
 from app.modules.problems import service as problems
+from app.modules.problems.models import Problem
 from app.modules.problems.schemas import ProblemPublic
+from app.modules.rag import service as rag
+from app.modules.rag.client import RagUnavailableError
 from app.modules.users.models import User
 
 # What every "send a message" call hands back to the router: the conversation, the system prompt for this turn, and
@@ -45,6 +49,33 @@ async def _resolve_problem(db: AsyncSession, cache: Cache, slug: str | None) -> 
     if problem is None:
         raise not_found("PROBLEM_NOT_FOUND", "Problem not found")
     return problem
+
+
+async def _related_problems(
+    db: AsyncSession, qdrant: AsyncQdrantClient, embedder: EmbeddingProvider, settings: Settings, message: str
+) -> list[tuple[str, str, str]]:
+    """Best-effort RAG context for an open-ended chat message with no problem already attached (see
+    `prompts.chat_system_prompt`). Never raises: an unconfigured or unreachable RAG backend just means chat
+    proceeds with no extra context, exactly as it did before this feature existed."""
+    if not settings.rag_configured:
+        return []
+    try:
+        ids = await rag.semantic_search(qdrant, embedder, settings, message, limit=3)
+    except RagUnavailableError:
+        return []
+    if not ids:
+        return []
+    rows = (
+        await db.execute(
+            select(Problem.id, Problem.slug, Problem.title, Problem.difficulty).where(
+                Problem.id.in_(ids), Problem.published.is_(True), Problem.archived_at.is_(None)
+            )
+        )
+    ).all()
+    by_id = {row.id: row for row in rows}
+    # Preserve Qdrant's relevance order, not the DB's — a plain WHERE ... IN does not guarantee it.
+    ordered = [by_id[i] for i in ids if i in by_id]
+    return [(row.slug, row.title, row.difficulty) for row in ordered]
 
 
 def _check_length(settings: Settings, text: str, field: str) -> None:
@@ -156,7 +187,13 @@ def _title_from(message: str) -> str:
 
 
 async def create_conversation(
-    db: AsyncSession, cache: Cache, settings: Settings, user: User, data: ConversationCreate
+    db: AsyncSession,
+    cache: Cache,
+    settings: Settings,
+    user: User,
+    data: ConversationCreate,
+    qdrant: AsyncQdrantClient,
+    embedder: EmbeddingProvider,
 ) -> StagedReply:
     """Creates the conversation with its first (user) message, and returns exactly what `stream_reply` needs — the
     same shape `prepare_reply` returns for every later message, so the router treats "first message" and "next
@@ -179,7 +216,8 @@ async def create_conversation(
     db.add(conversation)
     await db.commit()
 
-    system = prompts.chat_system_prompt(problem)
+    related = [] if problem else await _related_problems(db, qdrant, embedder, settings, data.message)
+    system = prompts.chat_system_prompt(problem, related)
     history = [(m.role, m.content) for m in conversation.messages]
     return conversation, system, history
 
@@ -215,7 +253,14 @@ async def delete_conversation(db: AsyncSession, user: User, conversation_id: uui
 
 
 async def prepare_reply(
-    db: AsyncSession, cache: Cache, settings: Settings, user: User, conversation_id: uuid.UUID, content: str
+    db: AsyncSession,
+    cache: Cache,
+    settings: Settings,
+    user: User,
+    conversation_id: uuid.UUID,
+    content: str,
+    qdrant: AsyncQdrantClient,
+    embedder: EmbeddingProvider,
 ) -> StagedReply:
     """Stages the user's message and returns everything `stream_reply` needs. Split out so the router can send the
     user's own message back immediately, before the (possibly slow) model call starts."""
@@ -225,7 +270,8 @@ async def prepare_reply(
         raise AppError(409, "CONVERSATION_FULL", "This conversation has reached its message limit. Start a new one.")
 
     problem = await _resolve_problem(db, cache, conversation.problem_slug)
-    system = prompts.chat_system_prompt(problem)
+    related = [] if problem else await _related_problems(db, qdrant, embedder, settings, content)
+    system = prompts.chat_system_prompt(problem, related)
     history: list[tuple[str, str]] = [(m.role, m.content) for m in conversation.messages]
     history.append((AiRole.USER.value, content))
 

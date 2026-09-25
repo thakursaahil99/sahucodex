@@ -6,12 +6,14 @@ An AI-powered coding and competitive-programming platform: an online judge (**Sa
 community, and a local, open-source AI assistant (**SahuCodeX AI**). Everything runs on free/open-source software and
 works locally with **no paid API keys**.
 
-> **Status: build phase 6 of 8 — Contests.** Accounts and sessions (phase 1), 30 original problems in a Monaco
+> **Status: build phase 8 of 8 — Advanced.** Accounts and sessions (phase 1), 30 original problems in a Monaco
 > workspace (phase 2), **SahuJudge** grading real code in an isolated sandbox (phase 3), public profiles with streaks
-> and achievements (phase 4), **SahuCodeX AI** hints/reviews/chat from a local Ollama model (phase 5), and now
-> **Contests**: timed, ICPC-style contests with phase-gated problems, registration, and standings computed live from
-> the same SahuJudge verdicts — no separate scoring pipeline, no client-supplied score. Community features are not
-> built yet; see the [roadmap](#roadmap). The UI shows unbuilt features as disabled, never as fake data.
+> and achievements (phase 4), **SahuCodeX AI** hints/reviews/chat from a local Ollama model (phase 5), **Contests**:
+> timed, ICPC-style contests with standings computed live from the same SahuJudge verdicts (phase 6), **Community**:
+> per-problem discussions, voting, reports and moderation (phase 7), and now **Advanced**: personalised
+> recommendations, cached contest standings, **RAG** (semantic "similar problems" search and retrieval-augmented AI
+> chat context, on [Qdrant](https://qdrant.tech)), and Prometheus metrics. See the [roadmap](#roadmap) for exactly
+> what shipped in this phase. The UI shows unbuilt features as disabled, never as fake data.
 
 ## What works today
 
@@ -179,7 +181,8 @@ The e2e suite registers many users from one IP; start the API with relaxed rate 
 
 [architecture](docs/architecture.md) · [problems](docs/problems.md) · [database](docs/database.md) · [api](docs/api.md) ·
 [authentication](docs/authentication.md) · [security](docs/security.md) · [judge](docs/judge.md) (design) ·
-[ai](docs/ai.md) · [contests](docs/contests.md) · [web preview](docs/web-preview.md) (design, not in the roadmap) ·
+[ai](docs/ai.md) · [contests](docs/contests.md) · [rag](docs/rag.md) ·
+[web preview](docs/web-preview.md) (design, not in the roadmap) ·
 [deployment](docs/deployment.md) · [troubleshooting](docs/troubleshooting.md)
 
 ## Roadmap
@@ -192,10 +195,29 @@ The e2e suite registers many users from one IP; start the API with relaxed rate 
 | 4 | Profiles, statistics, streaks, achievements, activity calendar, dashboard stats | **Done** |
 | 5 | SahuCodeX AI: hints, explain, review, debug, chat, streaming, rate limits | **Done** |
 | 6 | Contests: creation, registration, timer, scoring, penalties, live standings | **Done** |
-| 7 | Community: discussions, voting, reports, notifications, moderation | Next |
-| 8 | RAG, recommendations, caching, analytics, Prometheus/Grafana, performance | |
+| 7 | Community: discussions, voting, reports, notifications, moderation | **Done** |
+| 8 | RAG, recommendations, caching, analytics, Prometheus/Grafana, performance | **Done** |
 
 ### Known limitations / TODO
+
+**Phase 8**
+
+* **RAG has no backfill job.** A problem published or last edited before `QDRANT_URL` was set is not retroactively
+  indexed; re-saving it through the admin editor indexes it (indexing runs synchronously on save, not as a
+  background job — see [docs/rag.md](docs/rag.md#known-limitations)).
+* **Recommendations and RAG candidate ranking both happen in Python after a DB fetch**, not in SQL. Fine at this
+  platform's actual problem-set size (dozens, not thousands); the seam to move it into SQL is noted at both
+  call sites if the catalog ever grows large enough to matter.
+* **Contest standings caching is a 5-second Redis cache, not a stored snapshot.** Standings are still computed
+  fresh from `submissions` on every cache miss — nothing new is persisted; this only absorbs a burst of concurrent
+  viewers within the frontend's existing 20s poll interval. The "no `leaderboards` snapshot table" limitation from
+  phase 6 (below) still applies.
+* **The `docker-compose.yml` `qdrant` service was never booted** (no Docker in the environment this was built in,
+  same as `sandbox`/`judge`/`ollama` before it) — parses as valid YAML; verified instead with an in-process
+  `qdrant-client` in the test suite. Prometheus/Grafana configs under `infrastructure/` are similarly unbooted.
+* Analytics is `AiUsage` rows being recorded (since phase 5) plus the metrics already exposed at `GET /metrics`
+  (Prometheus format) — there is no separate analytics dashboard UI in this phase.
+* Full details on RAG specifically: [docs/rag.md](docs/rag.md).
 
 **Phase 6**
 
@@ -225,9 +247,10 @@ The e2e suite registers many users from one IP; start the API with relaxed rate 
 * Hints given this visit are remembered by the page, not the server — a reload restarts the hint sequence.
 * The first request after Ollama has been idle is slow (the model reloads; ~9 s for a 3B model here). Raise
   `AI_REQUEST_TIMEOUT` for larger models.
-* One shared AI rate budget (`RATE_LIMIT_AI`) rather than per-feature; usage rows are recorded but nothing reads them until
-  phase 8's analytics.
-* The **Debugger** is a chat quick-start template, not a separate endpoint; **RAG** (Qdrant/Chroma) is not built (phase 8).
+* One shared AI rate budget (`RATE_LIMIT_AI`) rather than per-feature; `AiUsage` rows are recorded (see phase 8's
+  known limitations above for what reads them).
+* The **Debugger** is a chat quick-start template, not a separate endpoint. **RAG** (semantic search,
+  retrieval-augmented chat context) shipped in phase 8 — see [docs/rag.md](docs/rag.md).
 * No GPU passthrough block in the compose file.
 
 **Phase 4**

@@ -16,7 +16,7 @@ from fastapi.responses import StreamingResponse
 from starlette import status
 
 from app.core.config import Settings
-from app.core.deps import CacheDep, DbSession, SettingsDep
+from app.core.deps import CacheDep, DbSession, EmbeddingProviderDep, QdrantDep, SettingsDep
 from app.core.rate_limit import get_rate_limiter
 from app.modules.ai import service
 from app.modules.ai.models import AiConversation
@@ -142,11 +142,18 @@ def _stream(
 
 @router.post("/conversations", status_code=status.HTTP_200_OK)
 async def create_conversation(
-    data: ConversationCreate, request: Request, user: CurrentUser, db: DbSession, cache: CacheDep, settings: SettingsDep
+    data: ConversationCreate,
+    request: Request,
+    user: CurrentUser,
+    db: DbSession,
+    cache: CacheDep,
+    settings: SettingsDep,
+    qdrant: QdrantDep,
+    embedder: EmbeddingProviderDep,
 ) -> StreamingResponse:
     await _enforce(request, settings, user)
     provider = get_ai_provider(request)
-    staged = await service.create_conversation(db, cache, settings, user, data)
+    staged = await service.create_conversation(db, cache, settings, user, data, qdrant, embedder)
     return _stream(request, settings, provider, user.id, staged)
 
 
@@ -159,8 +166,10 @@ async def send_message(
     db: DbSession,
     cache: CacheDep,
     settings: SettingsDep,
+    qdrant: QdrantDep,
+    embedder: EmbeddingProviderDep,
 ) -> StreamingResponse:
     await _enforce(request, settings, user)
     provider = get_ai_provider(request)
-    staged = await service.prepare_reply(db, cache, settings, user, conversation_id, data.content)
+    staged = await service.prepare_reply(db, cache, settings, user, conversation_id, data.content, qdrant, embedder)
     return _stream(request, settings, provider, user.id, staged)

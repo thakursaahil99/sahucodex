@@ -1,0 +1,9 @@
+# Tells Grafana to load every dashboard JSON file in this directory on startup.
+apiVersion: 1
+
+providers:
+  - name: SahuCodeX
+    folder: SahuCodeX
+    type: file
+    options:
+      path: /etc/grafana/provisioning/dashboards

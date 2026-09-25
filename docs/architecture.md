@@ -19,22 +19,31 @@
                      │     │
             ┌────────┘     └────────┐
             ▼                       ▼
-     ┌────────────┐          ┌────────────┐        ┌──────────────┐
-     │ PostgreSQL │          │   Redis    │        │ Ollama (opt.)│  ← phase 5
-     └────────────┘          └─────┬──────┘        └──────────────┘
-                                   │  queue "judge" (Celery)
-                                   ▼
-                          ┌────────────────┐        ┌──────────────────┐
-                          │ Judge worker   │───────▶│ dedicated sandbox │
+     ┌────────────┐          ┌────────────┐        ┌──────────────┐        ┌──────────────┐
+     │ PostgreSQL │          │   Redis    │        │ Ollama (opt.)│        │ Qdrant (opt.)│  ← phase 8
+     └────────────┘          └─────┬──────┘        └──────────────┘        └──────────────┘
+                                   │  queue "judge" (Celery)                        ▲
+                                   ▼                                                │ vectors, from embeddings
+                          ┌────────────────┐        ┌──────────────────┐           │ (Ollama /api/embeddings)
+                          │ Judge worker   │───────▶│ dedicated sandbox │───────────┘
                           │ (apps/judge)   │        │ Docker daemon     │
                           └────────────────┘        └──────────────────┘
+
+     ┌───────────────┐        ┌────────────┐    scrapes GET /metrics on the API (optional, phase 8)
+     │ Prometheus    │───────▶│  Grafana   │
+     │ (opt.)        │        │  (opt.)    │
+     └───────────────┘        └────────────┘
 ```
 
-Build status: **phases 1–6 (foundation, problem platform, SahuJudge, profiles, SahuCodeX AI, contests)** are
-implemented — everything drawn above except Qdrant, MinIO and the metrics stack. The API talks to Ollama over HTTP — a
-local model, no paid service — see [ai.md](ai.md). The judge worker talks to its own, isolated Docker daemon (never
+Build status: **all 8 phases (foundation, problem platform, SahuJudge, profiles, SahuCodeX AI, contests, community,
+advanced)** are implemented. The API talks to Ollama over HTTP for both chat and embeddings — a local model, no paid
+service — see [ai.md](ai.md) and [rag.md](rag.md). The judge worker talks to its own, isolated Docker daemon (never
 the host's socket, never the application's) — see [judge.md](judge.md). Contests reuse that same judge pipeline
-unchanged — see [contests.md](contests.md). See the [README](../README.md#roadmap).
+unchanged — see [contests.md](contests.md). Qdrant, Prometheus and Grafana are all optional (like Ollama itself):
+each is a `docker-compose.yml` profile (`rag`, `observability`) that was never booted in the environment this was
+built in (no Docker here) — their config parses as valid YAML/JSON and is exercised where possible without Docker
+(RAG against an in-process `qdrant-client`, metrics against the real `prometheus_client` library — see
+[rag.md](rag.md#what-was-run) and `apps/api/tests/test_platform.py`). See the [README](../README.md#roadmap).
 
 ## Repository layout
 
@@ -45,7 +54,7 @@ apps/judge       SahuJudge — the Celery worker, sandbox driver and verdict eng
                  models and settings rather than duplicating them
 packages/shared  Types/constants shared by the web app (brand, roles, nav, API error shape)
 database/        Alembic migrations (database/migrations) and seed scripts (database/seeds)
-infrastructure/  Dockerfiles + Caddyfile (docker/), Prometheus and Grafana config (phase 8)
+infrastructure/  Dockerfiles + Caddyfile (docker/), Prometheus and Grafana config (prometheus/, grafana/, phase 8)
 docs/            This documentation
 ```
 
@@ -118,7 +127,7 @@ request-scoped session closes, so a failed request cannot leave half-written sta
 | **A "Run" is not a "Submission"** | Run (the editor's quick-check button) is ephemeral: a short-lived Redis record, no database row, no effect on progress or counters — a user iterating on a solution shouldn't create submission history or consume the judge's durable storage. A Submit is graded against hidden tests too and is permanent. Both share the same engine and sandbox. |
 | **The event WebSocket authenticates with a minted ticket, not the access token** | A WebSocket handshake cannot carry an `Authorization` header, and putting the token in the URL would leak it into proxy logs. `POST /api/ws/ticket` mints a random, single-use, 30-second, user-bound ticket (stored only as a hash) that the socket redeems once. |
 | **Profile stats, streaks and achievements are public, not owner-only** | `GET /api/users/{username}/stats` needs no auth, the same as the public profile it sits beside — matching how GitHub/LeetCode show activity publicly. A user's *submissions* (their source code) stay owner-only; only aggregate counts, dates and achievement names are public. |
-| **`img-src` allows any `https:` host, for user-set avatar URLs** | There is no file upload or storage abstraction yet (planned for phase 8), so an avatar is a plain URL the user supplies. Images cannot execute script, so allowing any HTTPS host is the standard low-risk way to support this without a per-host allow-list or a proxy. |
+| **`img-src` allows any `https:` host, for user-set avatar URLs** | There is no file upload or storage abstraction (a MinIO/S3-style object store was sketched for this but not built — no phase currently scopes it), so an avatar is a plain URL the user supplies. Images cannot execute script, so allowing any HTTPS host is the standard low-risk way to support this without a per-host allow-list or a proxy. |
 | **AI chat streams over plain HTTP (Server-Sent Events), not the WebSocket** | The reply is one request's response, so a normal `fetch` streams it and can send the `Authorization` header — no ticket dance, no long-lived socket, and it works through Caddy unbuffered. The submissions WebSocket exists because judging finishes *later, elsewhere* (a worker); an AI reply is produced during the request. |
 | **Hint / Explain / Review are one-shot; only chat streams and is stored** | They are read once, in full, and are not conversations; streaming them would add UI state for no benefit. Chat is where seeing the reply arrive matters, and where history is useful. One-shots leave only a usage row. |
 | **The AI gets problem context by slug, resolved server-side, from the public shape only** | The client never sends statement text, and the server builds the prompt from `ProblemPublic` — the same object the public API returns, which has no field for hidden tests or the editorial. Leaking them would need a bug where `ProblemPublic` is built, not in the AI code. |

@@ -9,6 +9,7 @@ import uuid
 
 import fakeredis
 import pytest
+from qdrant_client import AsyncQdrantClient
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
@@ -20,7 +21,12 @@ from tests.conftest import RecordingQueue, make_settings
 @pytest.fixture
 def stack():
     redis = fakeredis.FakeAsyncRedis(server=fakeredis.FakeServer(), decode_responses=True)
-    app = create_app(make_settings(), redis_client=redis, job_queue=RecordingQueue())  # type: ignore[arg-type]
+    app = create_app(
+        make_settings(),
+        redis_client=redis,  # type: ignore[arg-type]
+        job_queue=RecordingQueue(),
+        qdrant_client=AsyncQdrantClient(location=":memory:"),  # type: ignore[arg-type]
+    )
     with TestClient(app) as client:
         yield client, redis
 

@@ -58,3 +58,14 @@ export function useRecommendations(enabled: boolean) {
     staleTime: 60_000,
   });
 }
+
+/** Semantic "similar problems" (RAG, phase 8) — anonymous-friendly, and quietly absent (not an error banner) when
+ * the server has no vector search configured; see RAG_UNAVAILABLE handling at the call site. */
+export function useSimilarProblems(slug: string) {
+  return useQuery({
+    queryKey: ["similar-problems", slug],
+    queryFn: () => apiPublic<ProblemListItem[]>(`/problems/${encodeURIComponent(slug)}/similar`),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}

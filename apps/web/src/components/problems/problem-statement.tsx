@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Clock, Copy, Cpu, Lightbulb, Lock } from "lucide-react";
+import { Check, Clock, Copy, Cpu, Lightbulb, Lock, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Markdown } from "@/components/ui/markdown";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { fetchHint } from "@/lib/problems/api";
+import { fetchHint, useSimilarProblems } from "@/lib/problems/api";
 import type { Hint, ProblemDetail } from "@/lib/problems/types";
 import { isApiError } from "@/lib/api/http";
 
@@ -115,6 +115,8 @@ export function ProblemStatement({ problem }: { problem: ProblemDetail }) {
               ))}
             </div>
           </Section>
+
+          <SimilarProblems slug={problem.slug} />
         </TabsContent>
 
         <TabsContent value="hints" className="mt-5">
@@ -156,6 +158,34 @@ export function ProblemStatement({ problem }: { problem: ProblemDetail }) {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+/** Quietly absent (no section, no error banner) when RAG isn't configured on this server or the search fails —
+ * this is a nice-to-have discovery aid, never something the reader needs to see an error about. */
+function SimilarProblems({ slug }: { slug: string }) {
+  const { data, isError } = useSimilarProblems(slug);
+  if (isError || !data || data.length === 0) return null;
+
+  return (
+    <Section title="Similar problems">
+      <ul className="grid gap-2 sm:grid-cols-2">
+        {data.map((problem) => (
+          <li key={problem.slug}>
+            <Link
+              href={`/problems/${problem.slug}`}
+              className="flex items-center justify-between gap-2 rounded-lg border bg-card p-3 text-sm hover:border-foreground/40"
+            >
+              <span className="flex items-center gap-2 truncate">
+                <Sparkles className="size-3.5 shrink-0 text-brand-cyan" aria-hidden />
+                <span className="truncate font-medium">{problem.title}</span>
+              </span>
+              <DifficultyBadge difficulty={problem.difficulty} />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Section>
   );
 }
 

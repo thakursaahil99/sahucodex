@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query, Request, status
 
-from app.core.deps import CacheDep, DbSession
+from app.core.deps import CacheDep, DbSession, EmbeddingProviderDep, QdrantDep, SettingsDep
 from app.core.net import client_ip, user_agent
 from app.core.pagination import Page, PageParamsDep
 from app.modules.auth.deps import CurrentUser
@@ -20,6 +20,7 @@ from app.modules.problems.schemas import (
     TagOut,
     ValidationReport,
 )
+from app.modules.rag import service as rag
 
 router = APIRouter(tags=["admin: problems"])
 
@@ -37,9 +38,17 @@ async def list_problems(
 
 @router.post("/problems", response_model=ProblemAdminOut, status_code=status.HTTP_201_CREATED)
 async def create_problem(
-    body: ProblemInput, request: Request, admin: CurrentUser, db: DbSession, cache: CacheDep
+    body: ProblemInput,
+    request: Request,
+    admin: CurrentUser,
+    db: DbSession,
+    cache: CacheDep,
+    qdrant: QdrantDep,
+    embedder: EmbeddingProviderDep,
+    settings: SettingsDep,
 ) -> ProblemAdminOut:
     problem = await svc.create_problem(db, cache, admin, body, ip=client_ip(request), user_agent=user_agent(request))
+    await rag.index_problem(qdrant, embedder, settings, problem)
     return svc.to_admin_out(problem)
 
 
@@ -50,11 +59,20 @@ async def get_problem(problem_id: uuid.UUID, db: DbSession) -> ProblemAdminOut:
 
 @router.put("/problems/{problem_id}", response_model=ProblemAdminOut)
 async def update_problem(
-    problem_id: uuid.UUID, body: ProblemInput, request: Request, admin: CurrentUser, db: DbSession, cache: CacheDep
+    problem_id: uuid.UUID,
+    body: ProblemInput,
+    request: Request,
+    admin: CurrentUser,
+    db: DbSession,
+    cache: CacheDep,
+    qdrant: QdrantDep,
+    embedder: EmbeddingProviderDep,
+    settings: SettingsDep,
 ) -> ProblemAdminOut:
     problem = await svc.update_problem(
         db, cache, admin, problem_id, body, ip=client_ip(request), user_agent=user_agent(request)
     )
+    await rag.index_problem(qdrant, embedder, settings, problem)
     return svc.to_admin_out(problem)
 
 
@@ -68,11 +86,21 @@ async def validate(problem_id: uuid.UUID, db: DbSession) -> ValidationReport:
 
 def _state_route(action: svc.Action):
     async def handler(
-        problem_id: uuid.UUID, request: Request, admin: CurrentUser, db: DbSession, cache: CacheDep
+        problem_id: uuid.UUID,
+        request: Request,
+        admin: CurrentUser,
+        db: DbSession,
+        cache: CacheDep,
+        qdrant: QdrantDep,
+        embedder: EmbeddingProviderDep,
+        settings: SettingsDep,
     ) -> ProblemAdminOut:
         problem = await svc.change_state(
             db, cache, admin, problem_id, action, ip=client_ip(request), user_agent=user_agent(request)
         )
+        # index_problem itself no-ops (removes any existing vector) for a problem that isn't published/is archived,
+        # so this one call is correct for publish, unpublish, archive, and restore alike.
+        await rag.index_problem(qdrant, embedder, settings, problem)
         return svc.to_admin_out(problem)
 
     handler.__name__ = f"{action}_problem"

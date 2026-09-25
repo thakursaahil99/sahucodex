@@ -164,6 +164,18 @@ class Settings(BaseSettings):
     ai_max_conversations: int = 50  # per user
     ai_max_messages_per_conversation: int = 100
 
+    # --- RAG (phase 8) ---------------------------------------------------------------------
+    # Optional, like AI itself: an unset QDRANT_URL means "no vector search configured" and every RAG-dependent
+    # feature (semantic problem search, "similar problems", retrieval-augmented chat context) is simply skipped —
+    # never a fake or empty-looking result standing in for a real one. Embeddings are Ollama's own /api/embeddings
+    # (no extra service beyond what AI already needs); OLLAMA_EMBED_MODEL is deliberately separate from
+    # OLLAMA_MODEL since a good chat model and a good embedding model are rarely the same one.
+    qdrant_url: str | None = None
+    qdrant_api_key: SecretStr | None = None
+    qdrant_collection: str = "sahucodex_problems"
+    ollama_embed_model: str = "nomic-embed-text"
+    rag_top_k: int = 5  # candidates returned by a similarity search
+
     # --- Email ---------------------------------------------------------------------------
     email_backend: Literal["console", "smtp"] = "console"
     email_from: str = "SahuCodeX <no-reply@sahucodex.local>"
@@ -238,6 +250,10 @@ class Settings(BaseSettings):
         if self.ai_provider == "openrouter":
             return bool(self.openrouter_model) and self.openrouter_api_key is not None
         return False
+
+    @property
+    def rag_configured(self) -> bool:
+        return bool(self.qdrant_url)
 
 
 @lru_cache

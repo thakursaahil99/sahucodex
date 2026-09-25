@@ -13,6 +13,7 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from qdrant_client import AsyncQdrantClient
 
 import app.db_models
 from app.core.config import Settings
@@ -106,6 +107,30 @@ class FakeAiProvider:
             yield token
 
 
+@dataclass
+class FakeEmbeddingProvider:
+    """Deterministic stand-in for Ollama's /api/embeddings: maps each *lowercased substring* key in `vectors` to a
+    fixed vector, so a test can control exactly which text embeds "near" which other text without a real model.
+    Text matching no key falls back to `default_vector` (orthogonal to every real key by construction below)."""
+
+    vectors: dict[str, list[float]] = field(default_factory=dict)
+    # 768 dims to match the RAG collection's fixed size (see app.modules.rag.service._VECTOR_SIZE) — the last
+    # component is set so this default is never the zero vector (Qdrant's cosine distance is undefined for that).
+    default_vector: list[float] = field(default_factory=lambda: [0.0] * 767 + [1.0])
+    down: bool = False
+    embed_calls: list[str] = field(default_factory=list)
+
+    async def embed(self, *, model: str, text: str, timeout_s: float) -> list[float]:
+        self.embed_calls.append(text)
+        if self.down:
+            raise AiUnavailableError("embedding server is down")
+        lowered = text.lower()
+        for key, vector in self.vectors.items():
+            if key.lower() in lowered:
+                return vector
+        return self.default_vector
+
+
 @pytest.fixture
 def settings() -> Settings:
     return make_settings()
@@ -129,6 +154,8 @@ async def build_app(outbox: Outbox) -> AsyncIterator[AppFactory]:
         redis: object | None = None,
         queue: RecordingQueue | None = None,
         ai_provider: FakeAiProvider | None = None,
+        embedding_provider: object | None = None,
+        qdrant_client: object | None = None,
     ) -> FastAPI:
         redis = redis or fakeredis.FakeAsyncRedis(server=fakeredis.FakeServer(), decode_responses=True)
         app = create_app(
@@ -137,7 +164,14 @@ async def build_app(outbox: Outbox) -> AsyncIterator[AppFactory]:
             email_sender=outbox,
             job_queue=queue or RecordingQueue(),
             ai_provider=ai_provider or FakeAiProvider(),
+            # An in-process Qdrant, never a real network client — `rag_configured` is False by default
+            # (make_settings leaves QDRANT_URL unset) so nothing here is ever queried, but building a real
+            # AsyncQdrantClient against an unreachable localhost:6333 still costs a connection attempt (and a
+            # noisy warning) per test.
+            qdrant_client=qdrant_client or AsyncQdrantClient(location=":memory:"),  # type: ignore[arg-type]
         )
+        if embedding_provider is not None:
+            app.state.embedding_provider = embedding_provider
         async with app.state.engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)

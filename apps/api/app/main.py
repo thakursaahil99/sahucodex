@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 
 import redis.asyncio as redis_asyncio
 from fastapi import APIRouter, Depends, FastAPI
+from qdrant_client import AsyncQdrantClient
 from redis.asyncio import Redis
 from starlette.middleware.cors import CORSMiddleware
 
@@ -22,7 +23,7 @@ from app.core.queue import JobQueue, build_job_queue
 from app.core.rate_limit import RateLimiter, general_rate_limit
 from app.modules.admin.community import router as moderation_router
 from app.modules.admin.router import router as admin_router
-from app.modules.ai.provider import AiProvider, build_ai_provider
+from app.modules.ai.provider import AiProvider, OllamaProvider, build_ai_provider
 from app.modules.ai.router import router as ai_router
 from app.modules.auth.router import router as auth_router
 from app.modules.community.router import router as community_router
@@ -30,6 +31,8 @@ from app.modules.contests.router import router as contests_router
 from app.modules.health.router import router as health_router
 from app.modules.problems.router import router as problems_router
 from app.modules.profiles.router import router as profiles_router
+from app.modules.rag.client import build_qdrant_client
+from app.modules.rag.router import router as rag_router
 from app.modules.submissions.router import router as submissions_router
 from app.modules.submissions.router import ws_router
 from app.modules.users.router import router as users_router
@@ -51,6 +54,7 @@ def create_app(
     email_sender: EmailSender | None = None,
     job_queue: JobQueue | None = None,
     ai_provider: AiProvider | None = None,
+    qdrant_client: AsyncQdrantClient | None = None,
 ) -> FastAPI:
     """Builds the app. Dependencies can be injected (tests do), otherwise they come from settings."""
     settings = settings or get_settings()
@@ -59,12 +63,14 @@ def create_app(
     engine = create_engine_from_settings(settings)
     redis_conn = redis_client or redis_asyncio.from_url(settings.redis_url, decode_responses=True)
     metrics = Metrics()
+    qdrant_conn = qdrant_client or build_qdrant_client(settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log.info("api_starting", env=settings.app_env)
         yield
         await redis_conn.aclose()
+        await qdrant_conn.close()
         await engine.dispose()
         log.info("api_stopped")
 
@@ -87,6 +93,8 @@ def create_app(
     app.state.email_sender = email_sender or build_email_sender(settings)
     app.state.queue = job_queue or build_job_queue(settings)
     app.state.ai_provider = ai_provider or build_ai_provider(settings)
+    app.state.embedding_provider = OllamaProvider(settings.ollama_base_url, settings.ollama_embed_model)
+    app.state.qdrant = qdrant_conn
     app.state.metrics = metrics
 
     register_exception_handlers(app)
@@ -117,6 +125,7 @@ def create_app(
     api.include_router(profiles_router)
     api.include_router(submissions_router)
     api.include_router(ai_router)
+    api.include_router(rag_router)
     api.include_router(community_router)
     api.include_router(moderation_router)
     api.include_router(admin_router)

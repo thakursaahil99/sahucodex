@@ -15,3 +15,4 @@ structlog==26.1.0
 prometheus-client==0.26.0
 celery==5.6.3  # job producer in the API; also the judge worker (apps/judge)
 httpx==0.28.1  # SahuCodeX AI's client to the Ollama HTTP API
+qdrant-client==1.19.1  # vector search for RAG (phase 8) — optional, see Settings.rag_configured
