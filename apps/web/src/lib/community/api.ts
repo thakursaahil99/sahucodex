@@ -56,10 +56,11 @@ export const reportContent = (targetType: TargetType, targetId: string, reason: 
 
 // --- notifications -----------------------------------------------------------------------------------------------
 
-export function useNotifications(unreadOnly = false) {
+export function useNotifications(unreadOnly = false, enabled = true) {
   return useQuery({
     queryKey: ["notifications", unreadOnly],
     queryFn: () => api<NotificationOut[]>(`/notifications${unreadOnly ? "?unread_only=true" : ""}`),
+    enabled,
   });
 }
 

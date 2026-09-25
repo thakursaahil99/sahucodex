@@ -74,7 +74,7 @@ function NotificationRow({ notification }: { notification: NotificationOut }) {
 export function NotificationBell() {
   const authenticated = useAuthStore((s) => s.status === "authenticated");
   const { data: unread } = useUnreadCount(authenticated);
-  const { data: notifications } = useNotifications();
+  const { data: notifications } = useNotifications(false, authenticated);
   const queryClient = useQueryClient();
 
   const markAll = useMutation({
