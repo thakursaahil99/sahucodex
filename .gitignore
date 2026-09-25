@@ -38,3 +38,6 @@ venv/
 Thumbs.db
 .idea/
 *.log
+
+# Claude Code runtime state (settings.json itself IS tracked and should stay that way)
+.claude/scheduled_tasks.lock

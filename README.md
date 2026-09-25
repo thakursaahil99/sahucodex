@@ -29,7 +29,7 @@ works locally with **no paid API keys**.
 | **Profiles** | A public profile per user (`/profile/username`): solved problems by difficulty, submission totals and acceptance rate, a current/longest solving streak, 8 achievements (earned and locked), a 365-day activity calendar. A settings page to edit your bio, country, website, GitHub and avatar URL |
 | **SahuCodeX AI** | **AI Hint** (progressive, never the solution), **AI Review** and **Explain** in the workspace, on their own *"a suggestion, not a verdict"* tab; a streaming **Assistant** chat with saved, renameable conversations and copyable code blocks. Runs on a local Ollama model you choose (`OLLAMA_MODEL`); unconfigured or unreachable, it says so — never a canned reply. The model only ever sees the public statement and your code, never hidden tests. Rate-limited, size-capped, metered. See [docs/ai.md](docs/ai.md) |
 | **Contests** | Timed, ICPC-style contests: problems stay hidden until `start_time`, registration is open until `end_time`, and standings (points, penalty, tiebreak) are computed live from SahuJudge's own verdicts on every request, briefly cached to absorb concurrent viewers — never stored otherwise, never client-supplied. Register-gated Submit/Run reuse the exact same judge pipeline as the plain workspace; AI assistance is switched off for fairness while a contest runs. Admins create, edit (locked once started) and publish contests, including which problems and how many points each is worth. See [docs/contests.md](docs/contests.md) |
-| **Community** | Per-problem discussion threads and replies, up/down voting, reporting, in-app notifications, and a MODERATOR-gated moderation queue (remove content via a report, or lock a thread directly) |
+| **Community** | Per-problem discussion threads and replies, up/down voting, reporting, in-app notifications, and a MODERATOR-gated moderation queue (remove content via a report, or lock a thread directly). See [docs/community.md](docs/community.md) |
 | **Recommendations** | A personalised "what to solve next" on the dashboard, ranked from your own solved-tag history and difficulty progression — purely content-based, no other user's data is ever read |
 | **RAG** | Semantic "similar problems" on the problem detail page, a `/search/semantic` endpoint, and retrieval-augmented context in SahuCodeX AI chat — all on [Qdrant](https://qdrant.tech) + Ollama embeddings, optional exactly like AI itself. See [docs/rag.md](docs/rag.md) |
 | **Admin** | Problem editor (create/edit, public and hidden tests, starter code, hints, editorial, readiness check, publish/unpublish/archive/restore — hidden tests never reach learners), contest authoring, and live analytics (platform totals, 30-day AI usage) |
@@ -189,7 +189,7 @@ The e2e suite registers many users from one IP; start the API with relaxed rate 
 
 [architecture](docs/architecture.md) · [problems](docs/problems.md) · [database](docs/database.md) · [api](docs/api.md) ·
 [authentication](docs/authentication.md) · [security](docs/security.md) · [judge](docs/judge.md) (design) ·
-[ai](docs/ai.md) · [contests](docs/contests.md) · [rag](docs/rag.md) ·
+[ai](docs/ai.md) · [contests](docs/contests.md) · [community](docs/community.md) · [rag](docs/rag.md) ·
 [web preview](docs/web-preview.md) (design, not in the roadmap) ·
 [deployment](docs/deployment.md) · [troubleshooting](docs/troubleshooting.md)
 

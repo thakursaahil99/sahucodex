@@ -183,10 +183,41 @@ Notes:
   is simpler. No `leaderboards` snapshot table: standings are cheap enough to compute live on every request from
   `submissions` (see [contests.md](contests.md#scoring-model)) that freezing a snapshot was not worth adding.
 
-## Planned tables
+## Phase 7 schema (migrations `0008` and `0009`)
 
-Added by the migration of the phase that needs them (names follow the project specification): `discussions`,
-`discussion_comments`, `discussion_votes`, `notifications` (7).
+```
+discussions            id, problem_id → problems (CASCADE), author_id → users (SET NULL), title, body,
+                        vote_score, comment_count, removed, locked (added in 0009), created_at, updated_at
+   └── 1:N discussion_comments   id, discussion_id → discussions (CASCADE), author_id → users (SET NULL),
+                                  body, vote_score, removed, created_at, updated_at
+
+discussion_votes       id, user_id → users (CASCADE), target_type ('discussion'|'comment'), target_id, value (±1),
+                        created_at — UNIQUE(user_id, target_type, target_id)
+
+reports                id, target_type ('discussion'|'comment'), target_id, reporter_id → users (SET NULL),
+                        reason, status ('OPEN'|'RESOLVED'|'DISMISSED'), resolved_by → users (SET NULL),
+                        resolved_at, created_at, updated_at
+
+notifications          id, user_id → users (CASCADE), type, data (JSON), read, created_at
+```
+
+Notes:
+
+* `discussion_votes` and `reports` use `target_type` + `target_id` instead of two nullable foreign keys, so one
+  table each covers both a discussion and a comment target without a near-duplicate table per target type.
+* `discussion_comments.discussion_id` is `CASCADE`: deleting a discussion (there is no such endpoint today, but the
+  constraint exists for completeness) removes its replies with it, unlike contests' deliberately defensive
+  `RESTRICT`/`SET NULL` choices above — a comment has no existence independent of its thread.
+* `discussions.locked` was added a phase later (`0009`), not in the original `0008` — see
+  [community.md](community.md#known-gaps-closed-in-phase-8): a same-day completeness audit after phase 7 shipped
+  found moderation could only remove content via a filed report, with no standalone "stop new replies" action.
+* See [community.md](community.md#data) for how these are used.
+
+## Phase 8
+
+No new tables. RAG's data (problem embeddings) lives in Qdrant, a separate vector store, not Postgres — see
+[rag.md](rag.md#setup). Recommendations and cached standings are computed from existing tables (`submissions`,
+`user_problem_progress`) and a short-lived Redis cache respectively; neither needed a schema change.
 
 ## Working with migrations
 
