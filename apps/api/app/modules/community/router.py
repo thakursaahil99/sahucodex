@@ -74,12 +74,24 @@ async def add_comment(
 
 
 @router.put("/community/{target_type}/{target_id}/vote", status_code=status.HTTP_204_NO_CONTENT)
-async def vote(target_type: TargetType, target_id: uuid.UUID, data: VoteInput, user: CurrentUser, db: DbSession) -> None:
+async def vote(
+    target_type: TargetType,
+    target_id: uuid.UUID,
+    data: VoteInput,
+    request: Request,
+    user: CurrentUser,
+    db: DbSession,
+    settings: SettingsDep,
+) -> None:
+    await get_rate_limiter(request).enforce("community_vote", str(user.id), settings.rate_limit_community_vote)
     await svc.cast_vote(db, target_type, target_id, user, data.value)
 
 
 @router.delete("/community/{target_type}/{target_id}/vote", status_code=status.HTTP_204_NO_CONTENT)
-async def unvote(target_type: TargetType, target_id: uuid.UUID, user: CurrentUser, db: DbSession) -> None:
+async def unvote(
+    target_type: TargetType, target_id: uuid.UUID, request: Request, user: CurrentUser, db: DbSession, settings: SettingsDep
+) -> None:
+    await get_rate_limiter(request).enforce("community_vote", str(user.id), settings.rate_limit_community_vote)
     await svc.remove_vote(db, target_type, target_id, user)
 
 

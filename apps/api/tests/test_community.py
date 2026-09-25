@@ -369,3 +369,38 @@ async def test_reporting_requires_auth(app) -> None:
         assert r.status_code == 401
         r = await anon.put(f"/api/community/discussion/{discussion_id}/vote", json={"value": 1})
         assert r.status_code == 401
+
+
+async def test_moderator_can_lock_a_discussion_blocking_new_comments(app) -> None:
+    await insert_problem(app, "two-sum")
+    async with signed_in(app, username="alice") as (alice, alice_headers):
+        discussion_id = await _new_discussion(app, alice, alice_headers, "two-sum")
+
+    async with signed_in(app, username="mod", roles=(RoleName.MODERATOR, RoleName.USER)) as (mod, mod_headers):
+        r = await mod.post(f"/api/moderation/discussions/{discussion_id}/lock", headers=mod_headers)
+        assert r.status_code == 204
+
+    async with _re_login(app, username="alice") as (alice, alice_headers):
+        detail = (await alice.get(f"/api/discussions/{discussion_id}")).json()
+        assert detail["locked"] is True
+
+        r = await alice.post(f"/api/discussions/{discussion_id}/comments", json={"body": "still here?"}, headers=alice_headers)
+        assert r.status_code == 409
+
+    async with signed_in(app, username="mod2", roles=(RoleName.MODERATOR, RoleName.USER)) as (mod, mod_headers):
+        r = await mod.post(f"/api/moderation/discussions/{discussion_id}/unlock", headers=mod_headers)
+        assert r.status_code == 204
+
+    async with _re_login(app, username="alice") as (alice, alice_headers):
+        detail = (await alice.get(f"/api/discussions/{discussion_id}")).json()
+        assert detail["locked"] is False
+        r = await alice.post(f"/api/discussions/{discussion_id}/comments", json={"body": "back now"}, headers=alice_headers)
+        assert r.status_code == 201
+
+
+async def test_locking_a_discussion_requires_moderator_role(app) -> None:
+    await insert_problem(app, "two-sum")
+    async with signed_in(app, username="alice") as (alice, alice_headers):
+        discussion_id = await _new_discussion(app, alice, alice_headers, "two-sum")
+        r = await alice.post(f"/api/moderation/discussions/{discussion_id}/lock", headers=alice_headers)
+        assert r.status_code == 403

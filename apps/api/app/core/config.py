@@ -114,6 +114,7 @@ class Settings(BaseSettings):
     rate_limit_ai: Rate = RateLimit(20, 3600)  # per user, across every AI feature — local inference is expensive
     rate_limit_community_post: Rate = RateLimit(10, 60)  # per user — discussions + comments share this budget
     rate_limit_community_report: Rate = RateLimit(10, 3600)  # per user — reports are rarer and easier to abuse
+    rate_limit_community_vote: Rate = RateLimit(60, 60)  # per user — votes are cheap but still worth capping
 
     # --- SahuJudge -----------------------------------------------------------------------
     submission_max_source_bytes: int = 65_536

@@ -27,3 +27,14 @@ async def list_reports(db: DbSession, status_filter: str | None = Query(None, al
 @router.post("/reports/{report_id}/resolve", status_code=status.HTTP_204_NO_CONTENT)
 async def resolve_report(report_id: uuid.UUID, body: ReportResolve, moderator: CurrentUser, db: DbSession) -> None:
     await svc.resolve_report(db, report_id, moderator, body.action)
+
+
+@router.post("/discussions/{discussion_id}/lock", status_code=status.HTTP_204_NO_CONTENT)
+async def lock_discussion(discussion_id: uuid.UUID, db: DbSession) -> None:
+    """Blocks new comments on the thread, independent of any report."""
+    await svc.set_discussion_locked(db, discussion_id, True)
+
+
+@router.post("/discussions/{discussion_id}/unlock", status_code=status.HTTP_204_NO_CONTENT)
+async def unlock_discussion(discussion_id: uuid.UUID, db: DbSession) -> None:
+    await svc.set_discussion_locked(db, discussion_id, False)

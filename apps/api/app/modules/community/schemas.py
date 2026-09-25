@@ -82,6 +82,7 @@ class DiscussionDetail(BaseModel):
     vote_score: int
     my_vote: int
     removed: bool
+    locked: bool
     created_at: datetime
     comments: list[CommentOut]
 

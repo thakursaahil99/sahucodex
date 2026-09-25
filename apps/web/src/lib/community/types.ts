@@ -43,6 +43,7 @@ export interface DiscussionDetail {
   vote_score: number;
   my_vote: number;
   removed: boolean;
+  locked: boolean;
   created_at: string;
   comments: CommentOut[];
 }

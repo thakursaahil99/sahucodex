@@ -189,6 +189,7 @@ async def get_discussion_detail(db: AsyncSession, discussion_id: uuid.UUID, user
         vote_score=discussion.vote_score,
         my_vote=my_vote,
         removed=discussion.removed,
+        locked=discussion.locked,
         created_at=discussion.created_at,
         comments=comments,
     )
@@ -196,6 +197,8 @@ async def get_discussion_detail(db: AsyncSession, discussion_id: uuid.UUID, user
 
 async def add_comment(db: AsyncSession, discussion_id: uuid.UUID, user: User, body: str) -> CommentOut:
     discussion = await _get_discussion(db, discussion_id)
+    if discussion.locked:
+        raise AppError(409, "DISCUSSION_LOCKED", "This discussion is locked and no longer accepts replies")
     comment = DiscussionComment(discussion_id=discussion_id, author_id=user.id, body=body)
     db.add(comment)
     discussion.comment_count += 1
@@ -295,10 +298,21 @@ async def list_reports(db: AsyncSession, status_filter: str | None) -> list[Repo
     stmt = stmt.order_by(Report.created_at.desc())
     rows = (await db.execute(stmt)).all()
 
+    # Batch-fetch targets per model type (one query per type, not one per report) to avoid an N+1 on the
+    # moderation queue.
+    ids_by_type: dict[str, set[uuid.UUID]] = {}
+    for report, _ in rows:
+        ids_by_type.setdefault(report.target_type, set()).add(report.target_id)
+    targets: dict[tuple[str, uuid.UUID], Discussion | DiscussionComment] = {}
+    for target_type, ids in ids_by_type.items():
+        model = await _target_model(target_type)
+        found = (await db.execute(select(model).where(model.id.in_(ids)))).scalars().all()
+        for row in found:
+            targets[(target_type, row.id)] = row
+
     out: list[ReportOut] = []
     for report, reporter_username in rows:
-        model = await _target_model(report.target_type)
-        target = await db.get(model, report.target_id)
+        target = targets.get((report.target_type, report.target_id))
         snippet = None
         removed = False
         if target is not None:
@@ -345,6 +359,14 @@ async def resolve_report(db: AsyncSession, report_id: uuid.UUID, moderator: User
         report.status = ReportStatus.DISMISSED.value
     report.resolved_by = moderator.id
     report.resolved_at = utcnow()
+    await db.commit()
+
+
+async def set_discussion_locked(db: AsyncSession, discussion_id: uuid.UUID, locked: bool) -> None:
+    """Independent of `removed`/reports: blocks new comments while keeping the thread and its existing
+    comments visible."""
+    discussion = await _get_discussion(db, discussion_id)
+    discussion.locked = locked
     await db.commit()
 
 

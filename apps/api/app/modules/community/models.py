@@ -55,6 +55,9 @@ class Discussion(Base, TimestampMixin):
     # A moderator/admin action (see app.modules.admin.community); the author is never notified why beyond this flag
     # being visible to them - the report that caused it, if any, stays staff-only.
     removed: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
+    # A moderator/admin action, independent of `removed` and not tied to any report - blocks new comments but
+    # keeps the thread and its existing comments visible.
+    locked: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
 
     comments: Mapped[list[DiscussionComment]] = relationship(back_populates="discussion", cascade="all, delete-orphan")
 

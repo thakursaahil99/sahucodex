@@ -1,10 +1,12 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { MessageSquareOff } from "lucide-react";
+import { Lock, MessageSquareOff, Unlock } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
+
+import { hasRole } from "@sahucodex/shared";
 
 import { ReportButton } from "@/components/community/report-button";
 import { VoteButtons } from "@/components/community/vote-buttons";
@@ -14,7 +16,7 @@ import { Markdown } from "@/components/ui/markdown";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { isApiError } from "@/lib/api/http";
-import { addComment, useDiscussion } from "@/lib/community/api";
+import { addComment, lockDiscussion, unlockDiscussion, useDiscussion } from "@/lib/community/api";
 import type { CommentOut } from "@/lib/community/types";
 import { timeAgo } from "@/lib/format";
 import { useAuthStore } from "@/lib/auth/store";
@@ -54,7 +56,7 @@ function CommentRow({ comment, discussionId }: { comment: CommentOut; discussion
   );
 }
 
-function CommentComposer({ discussionId }: { discussionId: string }) {
+function CommentComposer({ discussionId, locked }: { discussionId: string; locked: boolean }) {
   const [body, setBody] = useState("");
   const queryClient = useQueryClient();
   const authenticated = useAuthStore((s) => s.status === "authenticated");
@@ -67,6 +69,14 @@ function CommentComposer({ discussionId }: { discussionId: string }) {
     },
     onError: (error) => toast.error(isApiError(error) ? error.message : "Couldn't post that reply. Try again."),
   });
+
+  if (locked) {
+    return (
+      <p className="flex items-center gap-1.5 border-t pt-4 text-sm text-muted-foreground">
+        <Lock className="size-3.5" aria-hidden /> This discussion is locked. No new replies.
+      </p>
+    );
+  }
 
   if (!authenticated) {
     return (
@@ -104,6 +114,29 @@ function CommentComposer({ discussionId }: { discussionId: string }) {
   );
 }
 
+function LockToggle({ discussionId, locked }: { discussionId: string; locked: boolean }) {
+  const user = useAuthStore((s) => s.user);
+  const queryClient = useQueryClient();
+
+  const toggle = useMutation({
+    mutationFn: () => (locked ? unlockDiscussion(discussionId) : lockDiscussion(discussionId)),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["discussion", discussionId] });
+      toast.success(locked ? "Discussion unlocked." : "Discussion locked.");
+    },
+    onError: (error) => toast.error(isApiError(error) ? error.message : "Couldn't update the lock. Try again."),
+  });
+
+  if (!hasRole(user?.roles, "MODERATOR")) return null;
+
+  return (
+    <Button variant="outline" size="sm" onClick={() => toggle.mutate()} disabled={toggle.isPending}>
+      {locked ? <Unlock className="size-3.5" aria-hidden /> : <Lock className="size-3.5" aria-hidden />}
+      {locked ? "Unlock" : "Lock"}
+    </Button>
+  );
+}
+
 export function DiscussionThread({ discussionId }: { discussionId: string }) {
   const { data, isLoading, error } = useDiscussion(discussionId);
 
@@ -134,6 +167,12 @@ export function DiscussionThread({ discussionId }: { discussionId: string }) {
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-semibold">{data.title}</h1>
             {data.removed && <Badge variant="outline">Removed by a moderator</Badge>}
+            {data.locked && (
+              <Badge variant="outline" className="gap-1">
+                <Lock className="size-3" aria-hidden /> Locked
+              </Badge>
+            )}
+            <LockToggle discussionId={data.id} locked={data.locked} />
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="font-medium text-foreground">{data.author.username ?? "[deleted]"}</span>
@@ -162,7 +201,7 @@ export function DiscussionThread({ discussionId }: { discussionId: string }) {
             <CommentRow key={c.id} comment={c} discussionId={discussionId} />
           ))}
         </ul>
-        <CommentComposer discussionId={discussionId} />
+        <CommentComposer discussionId={discussionId} locked={data.locked} />
       </div>
     </div>
   );

@@ -88,3 +88,9 @@ export function useReports(status?: "OPEN" | "RESOLVED" | "DISMISSED") {
 
 export const resolveReport = (reportId: string, action: "remove_content" | "dismiss") =>
   api<void>(`/moderation/reports/${reportId}/resolve`, { method: "POST", body: { action } });
+
+export const lockDiscussion = (discussionId: string) =>
+  api<void>(`/moderation/discussions/${discussionId}/lock`, { method: "POST" });
+
+export const unlockDiscussion = (discussionId: string) =>
+  api<void>(`/moderation/discussions/${discussionId}/unlock`, { method: "POST" });
