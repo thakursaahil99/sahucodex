@@ -1,6 +1,15 @@
 {
   "permissions": {
     "allow": [
+      "Read",
+      "Edit(e:/Sahil Templates/Sahu Codex/**)",
+      "Edit(E:/Sahil Templates/Sahu Codex/**)",
+      "Write(e:/Sahil Templates/Sahu Codex/**)",
+      "Write(E:/Sahil Templates/Sahu Codex/**)",
+      "Edit(C:/Users/user/AppData/Local/Temp/**)",
+      "Write(C:/Users/user/AppData/Local/Temp/**)",
+      "Glob",
+      "Grep",
       "Bash(git *)",
       "Bash(npx vercel *)",
       "Bash(vercel *)",
@@ -37,7 +46,17 @@
       "Bash(psql *)",
       "Bash(bash */deploy_api.sh*)",
       "Bash(bash */finish_prod_setup.sh*)",
-      "Bash(C:/Users/user/AppData/Local/Temp/claude/e--Sahil-Templates-Sahu-Codex/0e241fd8-85c1-4845-826b-8d45897aaa7e/scratchpad/py312/python.exe -m pytest -q -p no:cacheprovider tests/test_community.py)"
+      "Bash(bash *)",
+      "Bash(touch *)",
+      "Bash(rmdir *)",
+      "Bash(netstat *)",
+      "Bash(taskkill *)",
+      "Bash(kill *)",
+      "Bash(export *)",
+      "Bash(cd *)",
+      "Bash(diff *)",
+      "Bash(true)",
+      "Bash(false)"
     ]
   }
 }
